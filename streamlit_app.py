@@ -38,9 +38,12 @@ data = get_flights()
 df = pd.DataFrame(data, columns=["time"])
 
 if df.empty:
-    st.error("❌ ما تم جلب بيانات من الموقع")
-    st.stop()
+    st.warning("⚠️ تعذر جلب البيانات - يتم تشغيل وضع المحاكاة")
 
+    now = dt.datetime.now()
+    times = [now + dt.timedelta(minutes=30*i) for i in range(24)]
+
+    df = pd.DataFrame(times, columns=["time"])
 df["time"] = pd.to_datetime(df["time"], errors="coerce")
 df = df.dropna()
 
