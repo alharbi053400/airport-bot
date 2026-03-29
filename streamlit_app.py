@@ -41,7 +41,9 @@ for t in data:
 df = pd.DataFrame(times, columns=["time"])
 
 # تجميع كل 30 دقيقة
-df["slot"] = df["time"].dt.floor("30min")
+df["slot"] = df = pd.DataFrame(times, columns=["time"])
+df["time"] = pd.to_datetime(df["time"], errors="coerce")
+df = df.dropna()
 counts = df.groupby("slot").size().reset_index(name="flights")
 
 # تحليل
