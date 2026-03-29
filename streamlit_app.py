@@ -1,68 +1,99 @@
 import streamlit as st
 import pandas as pd
 import requests
-from bs4 import BeautifulSoup
 import datetime as dt
+import random
 
 st.title("✈️ تحليل الرحلات - صالة 1")
 
-URL = "https://www.kaia.sa/ar-SA/flights?tab=1"
-
-
+# =========================
+# جلب البيانات (API + fallback)
+# =========================
 @st.cache_data
 def get_flights():
-    res = requests.get(URL)
-    soup = BeautifulSoup(res.text, "html.parser")
+
+    url = "https://api.kaia.sa/api/flights/departures"
+    headers = {"User-Agent": "Mozilla/5.0"}
+
+    try:
+        res = requests.get(url, headers=headers, timeout=5)
+        data = res.json()
+
+        times = []
+
+        for flight in data.get("data", []):
+            t = flight.get("scheduledTime")
+            if t:
+                parsed = dt.datetime.fromisoformat(t)
+                times.append(parsed)
+
+        # لو جاب بيانات فعلاً
+        if len(times) > 5:
+            return times, "real"
+
+    except:
+        pass
+
+    # =========================
+    # fallback (محاكاة ذكية)
+    # =========================
+    now = dt.datetime.now().replace(minute=0, second=0)
 
     times = []
-    rows = soup.select("table tr")
+    for i in range(24):
 
-    for row in rows[1:]:
-        cols = row.find_all("td")
-        if len(cols) < 4:
-            continue
+        base = now + dt.timedelta(minutes=30 * i)
 
-        t = cols[3].text.strip()
+        # توزيع ذكي للزحام
+        hour = base.hour
 
-        try:
-            parsed = dt.datetime.strptime(t, "%H:%M")
-            times.append(parsed)
-        except:
-            continue
+        if 6 <= hour <= 10:
+            flights = random.randint(10, 20)  # صباح
+        elif 17 <= hour <= 22:
+            flights = random.randint(12, 25)  # مساء (زحمة)
+        else:
+            flights = random.randint(3, 8)   # عادي
 
-    return times
+        for _ in range(flights):
+            times.append(base)
+
+    return times, "simulated"
 
 
-# تشغيل الدالة
-data = get_flights()
+# =========================
+# تشغيل النظام
+# =========================
+data, mode = get_flights()
+
+if mode == "simulated":
+    st.warning("⚠️ يتم تشغيل وضع المحاكاة (البيانات غير متاحة حالياً)")
+else:
+    st.success("✅ بيانات حقيقية محدثة")
 
 df = pd.DataFrame(data, columns=["time"])
 
 df["time"] = pd.to_datetime(df["time"], errors="coerce")
 df = df.dropna()
 
-# إذا ما فيه بيانات → محاكاة
-if df.empty:
-    st.warning("⚠️ يتم تشغيل وضع المحاكاة")
-
-    now = dt.datetime.now()
-    times = [now + dt.timedelta(minutes=30*i) for i in range(24)]
-
-    df = pd.DataFrame(times, columns=["time"])
-
-
-# تقسيم الوقت
+# تقسيم كل 30 دقيقة
 df["slot"] = df["time"].dt.floor("30min")
 
-# التجميع
+# عدد الرحلات
 counts = df.groupby("slot").size().reset_index(name="flights")
 
+# =========================
+# التحليل الذكي
+# =========================
 result = []
 
 for _, row in counts.iterrows():
-    f = row["flights"]
-    total = min(f * 3, 50)
 
+    f = row["flights"]
+
+    # حساب الموظفين
+    employees = min(f * 3, 50)
+
+    # تحديد الحالة
     if f >= 20:
         level = "🔴 عالي"
         dist = 4
@@ -76,21 +107,50 @@ for _, row in counts.iterrows():
         dist = 2
         counters = 40
 
+    # توصية تشغيل
+    if f >= 20:
+        action = "زيادة فورية + فتح كل الكونترات"
+    elif f >= 10:
+        action = "تعزيز جزئي"
+    else:
+        action = "تشغيل طبيعي"
+
     result.append([
         row["slot"],
         f,
-        total,
+        employees,
         level,
         dist,
-        counters
+        counters,
+        action
     ])
 
-
 final_df = pd.DataFrame(result, columns=[
-    "الوقت", "الرحلات", "الموظفين", "الحالة", "الدعم", "الكونترات"
+    "الوقت",
+    "الرحلات",
+    "الموظفين",
+    "الحالة",
+    "الدعم",
+    "الكونترات",
+    "التوصية"
 ])
 
+# =========================
+# عرض البيانات
+# =========================
 st.dataframe(final_df, use_container_width=True)
 
+# =========================
+# تنبيه الذروة
+# =========================
+peak = final_df[final_df["الرحلات"] == final_df["الرحلات"].max()]
+
+if not peak.empty:
+    st.error(f"🚨 ذروة التشغيل عند: {peak.iloc[0]['الوقت']}")
+
+# =========================
+# الرسم البياني
+# =========================
 st.subheader("📊 الرسم البياني")
+
 st.line_chart(final_df.set_index("الوقت")["الرحلات"])
