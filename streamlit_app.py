@@ -13,7 +13,7 @@ def get_flights():
     res = requests.get(URL)
     soup = BeautifulSoup(res.text, "html.parser")
 
-    flights = []
+    times = []
     rows = soup.select("table tr")
 
     for row in rows[1:]:
@@ -21,32 +21,33 @@ def get_flights():
         if len(cols) < 4:
             continue
 
-        time = cols[3].text.strip()
-        flights.append(time)
+        t = cols[3].text.strip()
 
-    return flights
+        try:
+            parsed = dt.datetime.strptime(t, "%H:%M")
+            times.append(parsed)
+        except:
+            continue
+
+    return times
 
 
 data = get_flights()
 
-# تحويل لأوقات
-times = []
-for t in data:
-    try:
-        parsed = dt.datetime.strptime(t, "%H:%M")
-        times.append(parsed)
-    except:
-        continue
+# 👇 الحل هنا
+df = pd.DataFrame(data, columns=["time"])
 
-df = pd.DataFrame(times, columns=["time"])
+if df.empty:
+    st.error("❌ ما تم جلب بيانات من الموقع")
+    st.stop()
 
-# تجميع كل 30 دقيقة
-df["slot"] = df = pd.DataFrame(times, columns=["time"])
 df["time"] = pd.to_datetime(df["time"], errors="coerce")
 df = df.dropna()
+
+df["slot"] = df["time"].dt.floor("30min")
+
 counts = df.groupby("slot").size().reset_index(name="flights")
 
-# تحليل
 result = []
 for _, row in counts.iterrows():
     f = row["flights"]
