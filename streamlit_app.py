@@ -170,4 +170,4 @@ st.dataframe(df[["الوقت","flights","forecast"]], use_container_width=True)
 # -----------------------------
 # 📈 رسم
 # -----------------------------
-st.line_chart(df.set_index("الوقت")[["flights","forecas
+st.line_chart(df.set_index("الوقت")[["flights","forecast"]])
