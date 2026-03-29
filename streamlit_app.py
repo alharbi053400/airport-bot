@@ -8,8 +8,16 @@ st.set_page_config(page_title="Airport Dashboard", layout="wide")
 
 st.title("✈️ نظام تحليل صالة 1 - الرحلات الدولية")
 
+# ⏱️ وقت التحديث
+st.caption(f"آخر تحديث: {dt.datetime.now().strftime('%H:%M:%S')}")
+
 # =========================
-# جلب البيانات (API + fallback)
+# زر التحكم
+# =========================
+use_real = st.toggle("تشغيل البيانات الحقيقية")
+
+# =========================
+# جلب البيانات
 # =========================
 @st.cache_data
 def get_flights():
@@ -60,9 +68,13 @@ def get_flights():
 
 
 # =========================
-# تشغيل النظام
+# تشغيل البيانات
 # =========================
 data, mode = get_flights()
+
+# لو المستخدم قفل الحقيقي → إجباري محاكاة
+if not use_real:
+    mode = "simulated"
 
 if mode == "simulated":
     st.warning("⚠️ يتم تشغيل وضع المحاكاة (البيانات غير متاحة حالياً)")
@@ -74,14 +86,12 @@ df = pd.DataFrame(data, columns=["time"])
 df["time"] = pd.to_datetime(df["time"], errors="coerce")
 df = df.dropna()
 
-# تقسيم الوقت
 df["slot"] = df["time"].dt.floor("30min")
 
-# تجميع الرحلات
 counts = df.groupby("slot").size().reset_index(name="flights")
 
 # =========================
-# التحليل الذكي
+# التحليل
 # =========================
 result = []
 
@@ -126,7 +136,7 @@ final_df = pd.DataFrame(result, columns=[
     "التوصية"
 ])
 
-# ترتيب وتحسين الوقت
+# ترتيب + تنسيق الوقت
 final_df = final_df.sort_values("الوقت")
 final_df["الوقت"] = final_df["الوقت"].dt.strftime("%H:%M")
 
@@ -142,21 +152,31 @@ col2.metric("أعلى ضغط", int(final_df["الرحلات"].max()))
 col3.metric("متوسط الرحلات", round(final_df["الرحلات"].mean(), 1))
 
 # =========================
-# تنبيه
+# تنبيه ذكي مطوّر
 # =========================
-if final_df["الرحلات"].max() >= 20:
-    st.error("🚨 ضغط عالي جداً - تدخل فوري")
-elif final_df["الرحلات"].max() >= 10:
-    st.warning("⚠️ ضغط متوسط - راقب التشغيل")
+max_f = final_df["الرحلات"].max()
+
+if max_f >= 20:
+    st.error(f"🚨 ضغط عالي جداً ({max_f} رحلة) - تدخل فوري")
+elif max_f >= 10:
+    st.warning(f"⚠️ ضغط متوسط ({max_f} رحلة) - راقب التشغيل")
 else:
     st.success("✅ الوضع مستقر")
 
 # =========================
-# الجدول
+# تلوين الجدول
 # =========================
+def highlight(row):
+    if "🔴" in row["الحالة"]:
+        return ["background-color: #ff4b4b"] * len(row)
+    elif "🟡" in row["الحالة"]:
+        return ["background-color: #f1c40f"] * len(row)
+    else:
+        return ["background-color: #2ecc71"] * len(row)
+
 st.subheader("📋 جدول الرحلات")
 
-st.dataframe(final_df, use_container_width=True)
+st.dataframe(final_df.style.apply(highlight, axis=1), use_container_width=True)
 
 # =========================
 # الرسم البياني
@@ -168,9 +188,9 @@ chart_df = final_df.set_index("الوقت")
 st.area_chart(chart_df["الرحلات"])
 
 # =========================
-# تنبيه الذروة
+# ذروة التشغيل
 # =========================
-peak = final_df[final_df["الرحلات"] == final_df["الرحلات"].max()]
+peak = final_df[final_df["الرحلات"] == max_f]
 
 if not peak.empty:
     st.error(f"🚨 ذروة التشغيل عند: {peak.iloc[0]['الوقت']}")
