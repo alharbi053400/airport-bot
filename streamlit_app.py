@@ -1,4 +1,3 @@
-"}
 import streamlit as st
 import pandas as pd
 import datetime as dt
@@ -15,10 +14,15 @@ st.title("✈️ نظام التشغيل الذكي")
 # 🧭 اختيار الصالة
 # -----------------------------
 terminal = st.selectbox(
-    "اختر الصالة",
-    ["صالة 1 (دولي)", "صالة شمال (داخلي)", "صالة حج"]
+    "🧭 اختر الصالة",
+    [
+        "صالة 1 (دولي)",
+        "الصالة الشمالية (دولي)",
+        "صالة الحج والعمرة"
+    ]
 )
 
+# زر تحديث
 if st.button("🔄 تحديث"):
     st.rerun()
 
@@ -36,7 +40,7 @@ def get_weather():
 temp = get_weather()
 
 # -----------------------------
-# 📡 محاولة بيانات حقيقية
+# 📡 بيانات حقيقية (محاولة)
 # -----------------------------
 def get_real_data():
     try:
@@ -50,6 +54,14 @@ def get_real_data():
 
         for tr in soup.select("table tr"):
             text = tr.get_text(" ", strip=True)
+
+            # فلترة الصالة
+            if terminal == "صالة 1 (دولي)" and "1" not in text:
+                continue
+            if terminal == "الصالة الشمالية (دولي)" and "شمال" not in text:
+                continue
+            if terminal == "صالة الحج والعمرة" and "حج" not in text:
+                continue
 
             match = re.search(r"\d{2}:\d{2}", text)
             if match:
@@ -74,7 +86,6 @@ def get_real_data():
 # 🤖 AI fallback
 # -----------------------------
 def generate_ai_data():
-
     now = dt.datetime.now()
     data = []
 
@@ -82,11 +93,11 @@ def generate_ai_data():
         t = now + dt.timedelta(minutes=30*i)
 
         if terminal == "صالة 1 (دولي)":
-            base = 18
-        elif terminal == "صالة شمال (داخلي)":
-            base = 10
+            base = 20
+        elif terminal == "الصالة الشمالية (دولي)":
+            base = 14
         else:
-            base = 6
+            base = 8
 
         hour = t.hour
 
@@ -131,7 +142,7 @@ peak = int(df["flights"].max())
 future_peak = int(df["forecast"].max())
 
 # -----------------------------
-# 📊 المؤشرات
+# 📊 مؤشرات
 # -----------------------------
 c1, c2, c3 = st.columns(3)
 
@@ -159,4 +170,4 @@ st.dataframe(df[["الوقت","flights","forecast"]], use_container_width=True)
 # -----------------------------
 # 📈 رسم
 # -----------------------------
-st.line_chart(df.set_index("الوقت")[["flights","fore
+st.line_chart(df.set_index("الوقت")[["flights","forecas
