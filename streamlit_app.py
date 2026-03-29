@@ -36,7 +36,7 @@ data = get_flights()
 
 # 👇 الحل هنا
 
-if data = get_flights()
+
 
 df = pd.DataFrame(data, columns=["time"])
 
