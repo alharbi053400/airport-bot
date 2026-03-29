@@ -1,13 +1,19 @@
+"}
 import streamlit as st
 import pandas as pd
 import datetime as dt
 import requests
+from bs4 import BeautifulSoup
 import random
+import re
 
 st.set_page_config(layout="wide")
 
 st.title("✈️ نظام التشغيل الذكي")
 
+# -----------------------------
+# 🧭 اختيار الصالة
+# -----------------------------
 terminal = st.selectbox(
     "اختر الصالة",
     ["صالة 1 (دولي)", "صالة شمال (داخلي)", "صالة حج"]
@@ -32,53 +38,83 @@ temp = get_weather()
 # -----------------------------
 # 📡 محاولة بيانات حقيقية
 # -----------------------------
-def try_real_data():
+def get_real_data():
     try:
         url = "https://www.kaia.sa/ar-SA/Flights?tab=1"
-        r = requests.get(url, timeout=5)
+        headers = {"User-Agent": "Mozilla/5.0"}
 
-        if "Flights" in r.text:
-            return True
-        else:
-            return False
+        r = requests.get(url, headers=headers, timeout=5)
+        soup = BeautifulSoup(r.text, "html.parser")
+
+        times = []
+
+        for tr in soup.select("table tr"):
+            text = tr.get_text(" ", strip=True)
+
+            match = re.search(r"\d{2}:\d{2}", text)
+            if match:
+                t = dt.datetime.strptime(match.group(), "%H:%M")
+                times.append(t)
+
+        if len(times) == 0:
+            return None
+
+        df = pd.DataFrame(times, columns=["time"])
+        df["slot"] = df["time"].dt.floor("30min")
+
+        df = df.groupby("slot").size().reset_index(name="flights")
+        df.rename(columns={"slot":"time"}, inplace=True)
+
+        return df
+
     except:
-        return False
-
-real = try_real_data()
+        return None
 
 # -----------------------------
-# 📊 البيانات (ذكية)
+# 🤖 AI fallback
 # -----------------------------
-now = dt.datetime.now()
-data = []
+def generate_ai_data():
 
-for i in range(24):
-    t = now + dt.timedelta(minutes=30*i)
+    now = dt.datetime.now()
+    data = []
 
-    if terminal == "صالة 1 (دولي)":
-        base = 18
-    elif terminal == "صالة شمال (داخلي)":
-        base = 10
-    else:
-        base = 6
+    for i in range(24):
+        t = now + dt.timedelta(minutes=30*i)
 
-    # ذروة صباح / مساء
-    hour = t.hour
-    peak_factor = 1
+        if terminal == "صالة 1 (دولي)":
+            base = 18
+        elif terminal == "صالة شمال (داخلي)":
+            base = 10
+        else:
+            base = 6
 
-    if 6 <= hour <= 10:
-        peak_factor = 1.4
-    elif 17 <= hour <= 21:
-        peak_factor = 1.6
+        hour = t.hour
 
-    flights = int(base * peak_factor + random.randint(-2, 2))
+        if 6 <= hour <= 10:
+            base *= 1.4
+        elif 17 <= hour <= 21:
+            base *= 1.6
 
-    data.append([t, max(1, flights)])
+        flights = int(base + random.randint(-2, 2))
 
-df = pd.DataFrame(data, columns=["time","flights"])
+        data.append([t, max(1, flights)])
+
+    df = pd.DataFrame(data, columns=["time","flights"])
+    return df
 
 # -----------------------------
-# 🧠 AI ذكي
+# 🎯 اختيار المصدر
+# -----------------------------
+df = get_real_data()
+
+if df is not None:
+    st.success("📡 بيانات حقيقية")
+else:
+    st.warning("⚠️ تم استخدام AI بدل البيانات الحقيقية")
+    df = generate_ai_data()
+
+# -----------------------------
+# 🧠 التوقع
 # -----------------------------
 df["hour"] = df["time"].dt.hour
 
@@ -95,7 +131,7 @@ peak = int(df["flights"].max())
 future_peak = int(df["forecast"].max())
 
 # -----------------------------
-# 📊 مؤشرات
+# 📊 المؤشرات
 # -----------------------------
 c1, c2, c3 = st.columns(3)
 
@@ -108,19 +144,10 @@ c3.metric("🔮 التوقع", future_peak)
 # -----------------------------
 if future_peak >= 25:
     st.error("🚨 ضغط عالي جداً")
-    st.audio("https://www.soundjay.com/buttons/sounds/beep-07.mp3", autoplay=True)
 elif future_peak >= 12:
     st.warning("⚠️ ضغط متوسط")
 else:
     st.success("✅ طبيعي")
-
-# -----------------------------
-# 📢 حالة البيانات
-# -----------------------------
-if real:
-    st.success("📡 تم الاتصال بالموقع (لكن البيانات محدودة)")
-else:
-    st.info("ℹ️ الموقع لا يسمح بجلب البيانات حالياً - يتم استخدام AI ذكي")
 
 # -----------------------------
 # 📋 جدول
@@ -132,4 +159,4 @@ st.dataframe(df[["الوقت","flights","forecast"]], use_container_width=True)
 # -----------------------------
 # 📈 رسم
 # -----------------------------
-st.line_chart(df.set_index("الوقت")[["flights","forecast"]])
+st.line_chart(df.set_index("الوقت")[["flights","fore
