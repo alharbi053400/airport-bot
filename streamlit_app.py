@@ -4,18 +4,17 @@ import requests
 import datetime as dt
 import random
 import os
-import numpy as np
 from xgboost import XGBRegressor
 
 st.set_page_config(layout="wide")
-st.title("✈️ نظام تشغيل صالة 1 - خريطة + AI")
+st.title("✈️ نظام تشغيل صالة 1 + AI + خريطة")
 
 st.caption(f"آخر تحديث: {dt.datetime.now().strftime('%H:%M:%S')}")
 
 DATA_FILE = "history.csv"
 
 # =========================
-# تحميل البيانات
+# تحميل / حفظ البيانات
 # =========================
 def load_history():
     if os.path.exists(DATA_FILE):
@@ -28,19 +27,17 @@ def save_history(df):
     combined.to_csv(DATA_FILE, index=False)
 
 # =========================
-# جلب الطائرات (Live)
+# جلب الطائرات (مستقر)
 # =========================
 def get_live_aircraft():
-
     url = "https://opensky-network.org/api/states/all"
     planes = []
 
     try:
-        res = requests.get(url)
+        res = requests.get(url, timeout=5)
         data = res.json()
 
         for p in data.get("states", []):
-
             lat = p[6]
             lon = p[5]
 
@@ -48,8 +45,8 @@ def get_live_aircraft():
                 if 20 <= lat <= 25 and 37 <= lon <= 42:
                     planes.append({"lat": lat, "lon": lon})
 
-    except:
-        pass
+    except Exception as e:
+        st.warning("⚠️ تعذر جلب الطائرات")
 
     return pd.DataFrame(planes)
 
@@ -57,7 +54,6 @@ def get_live_aircraft():
 # تحويل الطائرات إلى رحلات
 # =========================
 def aircraft_to_flights():
-
     planes = get_live_aircraft()
     times = []
 
@@ -70,7 +66,7 @@ def aircraft_to_flights():
     return times
 
 # =========================
-# fallback
+# fallback قوي
 # =========================
 def fallback():
     now = dt.datetime.now()
@@ -86,14 +82,13 @@ def fallback():
     return times
 
 # =========================
-# AI XGBoost
+# AI (XGBoost)
 # =========================
 def ai_model(df):
-
     history = load_history()
 
     if len(history) < 50:
-        df["forecast"] = df["flights"] * 1.3
+        df["forecast"] = df["flights"] * 1.2
         return df
 
     history["time"] = pd.to_datetime(history["time"])
@@ -103,7 +98,7 @@ def ai_model(df):
     X = history[["hour","day"]]
     y = history["flights"]
 
-    model = XGBRegressor(n_estimators=100)
+    model = XGBRegressor(n_estimators=50)
     model.fit(X, y)
 
     preds = []
@@ -124,18 +119,23 @@ def ai_model(df):
     return df
 
 # =========================
-# تشغيل البيانات
+# تشغيل النظام
 # =========================
-times = aircraft_to_flights()
+try:
+    times = aircraft_to_flights()
+except:
+    times = []
 
 if len(times) < 5:
+    st.warning("⚠️ تشغيل وضع المحاكاة")
     times = fallback()
-    st.warning("⚠️ fallback")
 else:
-    st.success("✅ طائرات مباشرة")
+    st.success("✅ بيانات طائرات مباشرة")
 
 df = pd.DataFrame(times, columns=["time"])
-df["time"] = pd.to_datetime(df["time"])
+df["time"] = pd.to_datetime(df["time"], errors="coerce")
+df = df.dropna()
+
 df["slot"] = df["time"].dt.floor("30min")
 
 counts = df.groupby("slot").size().reset_index(name="flights")
@@ -145,36 +145,36 @@ save_history(counts.rename(columns={"slot":"time"}))
 counts = ai_model(counts)
 
 # =========================
-# خريطة
+# الخريطة
 # =========================
 st.subheader("🗺️ الطائرات حول جدة")
 
 map_df = get_live_aircraft()
 
-if not map_df.empty:
-    st.map(map_df)
-else:
-    st.warning("لا توجد بيانات خريطة")
+if map_df.empty:
+    st.warning("⚠️ لا توجد بيانات - عرض نقطة افتراضية")
+    map_df = pd.DataFrame({"lat":[21.5],"lon":[39.2]})
+
+st.map(map_df)
 
 # =========================
-# تحليل
+# التحليل
 # =========================
 result = []
 
 for _, row in counts.iterrows():
-
     f = row["forecast"]
 
     if f >= 20:
         level = "🔴 عالي"
         counters = 60
         support = 4
-        decision = "فتح جميع الكونترات + دعم كامل"
+        decision = "تدخل فوري"
     elif f >= 10:
         level = "🟡 متوسط"
         counters = 50
         support = 3
-        decision = "تعزيز جزئي"
+        decision = "تعزيز"
     else:
         level = "🟢 طبيعي"
         counters = 40
@@ -205,12 +205,15 @@ c2.metric("أعلى ضغط", int(final_df["الرحلات"].max()))
 c3.metric("توقع الذروة", int(counts["forecast"].max()))
 
 # =========================
-# عرض
+# الجدول
 # =========================
-st.subheader("📊 نظام التشغيل")
+st.subheader("📊 لوحة التشغيل")
 
 st.dataframe(final_df, use_container_width=True)
 
+# =========================
+# الرسم
+# =========================
 st.subheader("📈 الحركة")
 
-st.area_chart(final_df.set_index("الوقت")["الرحلات"])
+st.line_chart(final_df.set_index("الوقت")["الرحلات"])
