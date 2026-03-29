@@ -1,219 +1,220 @@
 import streamlit as st
 import pandas as pd
 import requests
+from bs4 import BeautifulSoup
 import datetime as dt
 import random
-import os
 from xgboost import XGBRegressor
 
 st.set_page_config(layout="wide")
-st.title("✈️ نظام تشغيل صالة 1 + AI + خريطة")
 
-st.caption(f"آخر تحديث: {dt.datetime.now().strftime('%H:%M:%S')}")
+st.title("✈️ نظام تشغيل المطار - AI لكل صالة")
 
-DATA_FILE = "history.csv"
+URL = "https://www.kaia.sa/ar-SA/flights?tab=1"
 
-# =========================
-# تحميل / حفظ البيانات
-# =========================
-def load_history():
-    if os.path.exists(DATA_FILE):
-        return pd.read_csv(DATA_FILE)
-    return pd.DataFrame(columns=["time","flights"])
-
-def save_history(df):
-    history = load_history()
-    combined = pd.concat([history, df])
-    combined.to_csv(DATA_FILE, index=False)
-
-# =========================
-# جلب الطائرات (مستقر)
-# =========================
-def get_live_aircraft():
-    url = "https://opensky-network.org/api/states/all"
-    planes = []
-
+# -----------------------------
+# 📡 جلب الرحلات
+# -----------------------------
+@st.cache_data(ttl=60)
+def get_flights():
     try:
-        res = requests.get(url, timeout=5)
-        data = res.json()
+        res = requests.get(URL, timeout=10)
+        soup = BeautifulSoup(res.text, "html.parser")
 
-        for p in data.get("states", []):
-            lat = p[6]
-            lon = p[5]
+        times = []
+        rows = soup.select("table tr")
 
-            if lat and lon:
-                if 20 <= lat <= 25 and 37 <= lon <= 42:
-                    planes.append({"lat": lat, "lon": lon})
+        for row in rows[1:]:
+            cols = row.find_all("td")
+            if len(cols) < 4:
+                continue
 
-    except Exception as e:
-        st.warning("⚠️ تعذر جلب الطائرات")
+            t = cols[3].text.strip()
 
-    return pd.DataFrame(planes)
+            try:
+                parsed = dt.datetime.strptime(t, "%H:%M")
+                times.append(parsed)
+            except:
+                continue
 
-# =========================
-# تحويل الطائرات إلى رحلات
-# =========================
-def aircraft_to_flights():
-    planes = get_live_aircraft()
-    times = []
+        return times
+    except:
+        return []
 
-    now = dt.datetime.now()
+# -----------------------------
+# 🧠 توزيع الصالات
+# -----------------------------
+def assign_terminal():
+    r = random.random()
+    if r < 0.6:
+        return "صالة 1 (دولي)"
+    elif r < 0.9:
+        return "صالة شمال (داخلي)"
+    else:
+        return "صالة حج"
 
-    for _ in range(len(planes)):
-        eta = now + dt.timedelta(minutes=random.randint(10, 90))
-        times.append(eta)
+# -----------------------------
+# 🧠 تدريب AI لكل صالة
+# -----------------------------
+def train_model(df):
 
-    return times
+    df["hour"] = df["slot"].dt.hour
+    df["day"] = df["slot"].dt.day
 
-# =========================
-# fallback قوي
-# =========================
-def fallback():
-    now = dt.datetime.now()
-    times = []
-
-    for i in range(24):
-        base = now + dt.timedelta(minutes=30*i)
-        flights = random.randint(5, 20)
-
-        for _ in range(flights):
-            times.append(base)
-
-    return times
-
-# =========================
-# AI (XGBoost)
-# =========================
-def ai_model(df):
-    history = load_history()
-
-    if len(history) < 50:
-        df["forecast"] = df["flights"] * 1.2
-        return df
-
-    history["time"] = pd.to_datetime(history["time"])
-    history["hour"] = history["time"].dt.hour
-    history["day"] = history["time"].dt.dayofweek
-
-    X = history[["hour","day"]]
-    y = history["flights"]
+    X = df[["hour","day"]]
+    y = df["flights"]
 
     model = XGBRegressor(n_estimators=50)
     model.fit(X, y)
 
+    return model
+
+# -----------------------------
+# 🔮 توقع
+# -----------------------------
+def predict(model, last_time):
+
     preds = []
 
-    for _, row in df.iterrows():
-        h = row["slot"].hour
-        d = row["slot"].dayofweek
+    for i in range(1,5):
+        t = last_time + dt.timedelta(minutes=30*i)
+        p = model.predict([[t.hour, t.day]])[0]
 
-        p = model.predict([[h,d]])[0]
-        final = int((p + row["flights"]) / 2)
+        preds.append(round(p,1))
 
-        if final < row["flights"]:
-            final = row["flights"]
+    return max(preds)
 
-        preds.append(final)
+# -----------------------------
+# 👥 توزيع الموظفين
+# -----------------------------
+def staff_distribution(flights):
 
-    df["forecast"] = preds
-    return df
+    passengers = flights * 150  # تقدير
 
-# =========================
-# تشغيل النظام
-# =========================
-try:
-    times = aircraft_to_flights()
-except:
-    times = []
+    counters = int(passengers / 30)
+    staff = int(counters * 1.2)
+    supervisors = max(1, int(counters / 20))
 
-if len(times) < 5:
-    st.warning("⚠️ تشغيل وضع المحاكاة")
-    times = fallback()
-else:
-    st.success("✅ بيانات طائرات مباشرة")
+    return passengers, counters, staff, supervisors
 
-df = pd.DataFrame(times, columns=["time"])
-df["time"] = pd.to_datetime(df["time"], errors="coerce")
-df = df.dropna()
+# -----------------------------
+# 📊 تشغيل
+# -----------------------------
+data = get_flights()
 
+if len(data) == 0:
+    st.warning("⚠️ محاكاة")
+    now = dt.datetime.now()
+    data = [now + dt.timedelta(minutes=30*i) for i in range(48)]
+
+df = pd.DataFrame(data, columns=["time"])
+df["time"] = pd.to_datetime(df["time"])
 df["slot"] = df["time"].dt.floor("30min")
+df["terminal"] = df["time"].apply(lambda x: assign_terminal())
 
-counts = df.groupby("slot").size().reset_index(name="flights")
+# -----------------------------
+# 🎛️ اختيار الصالة
+# -----------------------------
+terminal_choice = st.radio(
+    "اختر الصالة:",
+    ["الجميع", "صالة 1 (دولي)", "صالة شمال (داخلي)", "صالة حج"],
+    horizontal=True
+)
 
-save_history(counts.rename(columns={"slot":"time"}))
+if terminal_choice != "الجميع":
+    df = df[df["terminal"] == terminal_choice]
 
-counts = ai_model(counts)
+# -----------------------------
+# 📊 تجميع
+# -----------------------------
+counts = df.groupby(["slot","terminal"]).size().reset_index(name="flights")
 
-# =========================
-# الخريطة
-# =========================
-st.subheader("🗺️ الطائرات حول جدة")
+# -----------------------------
+# 🧠 AI لكل صالة
+# -----------------------------
+final = []
 
-map_df = get_live_aircraft()
+for terminal in counts["terminal"].unique():
 
-if map_df.empty:
-    st.warning("⚠️ لا توجد بيانات - عرض نقطة افتراضية")
-    map_df = pd.DataFrame({"lat":[21.5],"lon":[39.2]})
+    sub = counts[counts["terminal"] == terminal]
 
-st.map(map_df)
+    model = train_model(sub)
 
-# =========================
-# التحليل
-# =========================
-result = []
+    future_peak = predict(model, sub["slot"].max())
 
-for _, row in counts.iterrows():
-    f = row["forecast"]
+    for _, row in sub.iterrows():
 
-    if f >= 20:
-        level = "🔴 عالي"
-        counters = 60
-        support = 4
-        decision = "تدخل فوري"
-    elif f >= 10:
-        level = "🟡 متوسط"
-        counters = 50
-        support = 3
-        decision = "تعزيز"
-    else:
-        level = "🟢 طبيعي"
-        counters = 40
-        support = 2
-        decision = "تشغيل طبيعي"
+        f = row["flights"]
 
-    result.append([
-        row["slot"],
-        f,
-        level,
-        counters,
-        support,
-        decision
-    ])
+        passengers, counters, staff, supervisors = staff_distribution(f)
 
-final_df = pd.DataFrame(result, columns=[
-    "الوقت","الرحلات","الحالة","الكونترات","الدعم","القرار"
+        if f >= 20:
+            level = "🔴 عالي"
+            decision = "🚨 تدخل فوري"
+        elif f >= 10:
+            level = "🟡 متوسط"
+            decision = "تعزيز"
+        else:
+            level = "🟢 طبيعي"
+            decision = "تشغيل طبيعي"
+
+        final.append([
+            row["slot"],
+            terminal,
+            f,
+            passengers,
+            counters,
+            staff,
+            supervisors,
+            future_peak,
+            level,
+            decision
+        ])
+
+final_df = pd.DataFrame(final, columns=[
+    "الوقت","الصالة","الرحلات","الركاب","الكونترات",
+    "الموظفين","المشرفين","توقع الذروة","الحالة","القرار"
 ])
 
 final_df["الوقت"] = final_df["الوقت"].dt.strftime("%H:%M")
 
-# =========================
-# KPI
-# =========================
-c1,c2,c3 = st.columns(3)
-c1.metric("إجمالي الرحلات", int(final_df["الرحلات"].sum()))
-c2.metric("أعلى ضغط", int(final_df["الرحلات"].max()))
-c3.metric("توقع الذروة", int(counts["forecast"].max()))
+# -----------------------------
+# 📊 KPI
+# -----------------------------
+st.subheader("📊 مؤشرات التشغيل")
 
-# =========================
-# الجدول
-# =========================
-st.subheader("📊 لوحة التشغيل")
+c1,c2,c3 = st.columns(3)
+
+c1.metric("إجمالي الركاب", int(final_df["الركاب"].sum()))
+c2.metric("أعلى ضغط", int(final_df["الرحلات"].max()))
+c3.metric("أعلى توقع", int(final_df["توقع الذروة"].max()))
+
+# -----------------------------
+# 📋 جدول
+# -----------------------------
+st.subheader("📋 نظام التشغيل الذكي")
 
 st.dataframe(final_df, use_container_width=True)
 
-# =========================
-# الرسم
-# =========================
-st.subheader("📈 الحركة")
+# -----------------------------
+# 📈 رسم
+# -----------------------------
+st.subheader("📈 الضغط")
 
-st.line_chart(final_df.set_index("الوقت")["الرحلات"])
+chart = final_df.pivot(index="الوقت", columns="الصالة", values="الرحلات")
+
+st.line_chart(chart)
+
+# -----------------------------
+# 🗺️ خريطة
+# -----------------------------
+st.subheader("🗺️ خريطة المطار")
+st.image(
+    "https://upload.wikimedia.org/wikipedia/commons/6/6f/Jeddah_map.png",
+    use_container_width=True
+)
+
+# -----------------------------
+# ⏱️ تحديث
+# -----------------------------
+st.caption(f"آخر تحديث: {dt.datetime.now().strftime('%H:%M:%S')}")
