@@ -37,6 +37,8 @@ data = get_flights()
 # 👇 الحل هنا
 df = pd.DataFrame(data, columns=["time"])
 
+if df = pd.DataFrame(data, columns=["time"])
+
 if df.empty:
     st.warning("⚠️ تعذر جلب البيانات - يتم تشغيل وضع المحاكاة")
 
@@ -44,9 +46,6 @@ if df.empty:
     times = [now + dt.timedelta(minutes=30*i) for i in range(24)]
 
     df = pd.DataFrame(times, columns=["time"])
-df["time"] = pd.to_datetime(df["time"], errors="coerce")
-df = df.dropna()
-
 df["slot"] = df["time"].dt.floor("30min")
 
 counts = df.groupby("slot").size().reset_index(name="flights")
