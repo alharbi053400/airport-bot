@@ -35,9 +35,6 @@ def get_flights():
 data = get_flights()
 
 # 👇 الحل هنا
-df = pd.DataFrame(data, columns=["time"])
-
-if df = pd.DataFrame(data, columns=["time"])
 
 if df.empty:
     st.warning("⚠️ تعذر جلب البيانات - يتم تشغيل وضع المحاكاة")
