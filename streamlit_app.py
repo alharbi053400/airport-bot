@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import datetime as dt
 import requests
-import random
+import url = "https://opensky-network.org/api/flights/departure?airport=OEJN"
 
 st.set_page_config(layout="wide")
 
