@@ -1,4 +1,3 @@
-final"}
 import streamlit as st
 import pandas as pd
 import datetime as dt
@@ -76,4 +75,4 @@ df["الوقت"] = df["time"].dt.strftime("%H:%M")
 
 st.dataframe(df[["الوقت","flights","passengers","forecast"]], use_container_width=True)
 
-st.line_chart(df.set_index("الوقت")[["flights","f
+st.line_chart(df.set_index("الوقت")[["flights","forecast"]])
