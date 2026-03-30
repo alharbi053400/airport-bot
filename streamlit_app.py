@@ -8,9 +8,13 @@ st.set_page_config(layout="wide")
 
 st.title("✈️ نظام تشغيل صالة 1 (دولي)")
 
+# زر تحديث
 if st.button("🔄 تحديث"):
     st.rerun()
 
+# -----------------------------
+# 🌦️ الطقس
+# -----------------------------
 def get_weather():
     try:
         url = "https://api.open-meteo.com/v1/forecast?latitude=21.5&longitude=39.2&current_weather=true"
@@ -21,6 +25,9 @@ def get_weather():
 
 temp = get_weather()
 
+# -----------------------------
+# 📊 البيانات
+# -----------------------------
 now = dt.datetime.now()
 data = []
 
@@ -42,6 +49,9 @@ for i in range(24):
 
 df = pd.DataFrame(data, columns=["time","flights","passengers"])
 
+# -----------------------------
+# 🧠 التوقع
+# -----------------------------
 df["hour"] = df["time"].dt.hour
 
 df["forecast"] = df["flights"] * (
@@ -53,6 +63,9 @@ df["forecast"] = df["flights"] * (
 if temp > 35:
     df["forecast"] *= 1.1
 
+# -----------------------------
+# 📊 المؤشرات
+# -----------------------------
 peak = int(df["flights"].max())
 future_peak = int(df["forecast"].max())
 total_passengers = int(df["passengers"].sum())
@@ -64,6 +77,9 @@ c2.metric("👥 الركاب", total_passengers)
 c3.metric("📈 أعلى ضغط", peak)
 c4.metric("🔮 التوقع", future_peak)
 
+# -----------------------------
+# 🚨 تنبيه
+# -----------------------------
 if future_peak >= 25:
     st.error("🚨 ضغط عالي جداً")
 elif future_peak >= 12:
@@ -71,6 +87,17 @@ elif future_peak >= 12:
 else:
     st.success("✅ طبيعي")
 
+# -----------------------------
+# 📋 جدول
+# -----------------------------
 df["الوقت"] = df["time"].dt.strftime("%H:%M")
-st.dataframe(df[["الوقت","flights","passengers","forecast"]], use_container_width=True)
+
+st.dataframe(
+    df[["الوقت","flights","passengers","forecast"]],
+    use_container_width=True
+)
+
+# -----------------------------
+# 📈 رسم (مهم يكون سطر واحد)
+# -----------------------------
 st.line_chart(df.set_index("الوقت")[["flights","forecast"]])
