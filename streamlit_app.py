@@ -111,4 +111,4 @@ st.write(df[["الوقت","flights","passengers","forecast","الرابط"]].to_
 # -----------------------------
 # 📈 رسم
 # -----------------------------
-st.line_chart(df.set_index("الوقت")[["flights","forecast
+st.line_chart(df.set_index("الوقت")[["flights","forecast"]])
