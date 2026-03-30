@@ -72,7 +72,5 @@ else:
     st.success("✅ طبيعي")
 
 df["الوقت"] = df["time"].dt.strftime("%H:%M")
-
 st.dataframe(df[["الوقت","flights","passengers","forecast"]], use_container_width=True)
-
 st.line_chart(df.set_index("الوقت")[["flights","forecast"]])
