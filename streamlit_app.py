@@ -44,28 +44,22 @@ temp = get_weather()
 # -----------------------------
 def get_real_data():
     try:
-        url = "https://www.kaia.sa/ar-SA/Flights?tab=1"
-        headers = {"User-Agent": "Mozilla/5.0"}
+        url = "https://opensky-network.org/api/flights/arrival?airport=OEJN"
+        r = requests.get(url, timeout=5)
 
-        r = requests.get(url, headers=headers, timeout=5)
-        soup = BeautifulSoup(r.text, "html.parser")
+        if r.status_code != 200:
+            return None
+
+        data = r.json()
+
+        if not data:
+            return None
 
         times = []
 
-        for tr in soup.select("table tr"):
-            text = tr.get_text(" ", strip=True)
-
-            # فلترة الصالة
-            if terminal == "صالة 1 (دولي)" and "1" not in text:
-                continue
-            if terminal == "الصالة الشمالية (دولي)" and "شمال" not in text:
-                continue
-            if terminal == "صالة الحج والعمرة" and "حج" not in text:
-                continue
-
-            match = re.search(r"\d{2}:\d{2}", text)
-            if match:
-                t = dt.datetime.strptime(match.group(), "%H:%M")
+        for flight in data:
+            if flight.get("lastSeen"):
+                t = dt.datetime.fromtimestamp(flight["lastSeen"])
                 times.append(t)
 
         if len(times) == 0:
@@ -75,7 +69,7 @@ def get_real_data():
         df["slot"] = df["time"].dt.floor("30min")
 
         df = df.groupby("slot").size().reset_index(name="flights")
-        df.rename(columns={"slot":"time"}, inplace=True)
+        df.rename(columns={"slot": "time"}, inplace=True)
 
         return df
 
