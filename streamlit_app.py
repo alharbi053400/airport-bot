@@ -13,14 +13,6 @@ if st.button("🔄 تحديث"):
     st.rerun()
 
 # -----------------------------
-# 🔗 رابط الرحلة الحقيقية
-# -----------------------------
-st.link_button(
-    "✈️ عرض تفاصيل الرحلة الحقيقية",
-    "https://www.kaia.sa/ar-SA/Flights/Departure?flightId=AT0249&date=2026-03-26T15%3A00%3A00%2B03%3A00"
-)
-
-# -----------------------------
 # 🌦️ الطقس
 # -----------------------------
 def get_weather():
@@ -34,7 +26,7 @@ def get_weather():
 temp = get_weather()
 
 # -----------------------------
-# 📊 بيانات (ثابتة وذكية)
+# 📊 البيانات
 # -----------------------------
 now = dt.datetime.now()
 data = []
@@ -42,7 +34,7 @@ data = []
 for i in range(24):
     t = now + dt.timedelta(minutes=30*i)
 
-    base = 20  # صالة 1
+    base = 20
 
     hour = t.hour
 
@@ -52,9 +44,16 @@ for i in range(24):
         base *= 1.6
 
     flights = int(base + random.randint(-2, 2))
-    data.append([t, max(1, flights)])
 
-df = pd.DataFrame(data, columns=["time","flights"])
+    # 👇 حساب الركاب
+    passengers = flights * random.randint(120, 180)
+
+    # 👇 رابط (نفس اللي عطيتني)
+    link = "https://www.kaia.sa/ar-SA/Flights/Departure?flightId=AT0249&date=2026-03-26T15%3A00%3A00%2B03%3A00"
+
+    data.append([t, flights, passengers, link])
+
+df = pd.DataFrame(data, columns=["time","flights","passengers","link"])
 
 # -----------------------------
 # 🧠 التوقع
@@ -75,12 +74,14 @@ if temp > 35:
 # -----------------------------
 peak = int(df["flights"].max())
 future_peak = int(df["forecast"].max())
+total_passengers = int(df["passengers"].sum())
 
-c1, c2, c3 = st.columns(3)
+c1, c2, c3, c4 = st.columns(4)
 
 c1.metric("✈️ الرحلات", int(df["flights"].sum()))
-c2.metric("📈 أعلى ضغط", peak)
-c3.metric("🔮 التوقع", future_peak)
+c2.metric("👥 الركاب", total_passengers)
+c3.metric("📈 أعلى ضغط", peak)
+c4.metric("🔮 التوقع", future_peak)
 
 # -----------------------------
 # 🚨 تنبيه
@@ -97,9 +98,17 @@ else:
 # -----------------------------
 df["الوقت"] = df["time"].dt.strftime("%H:%M")
 
-st.dataframe(df[["الوقت","flights","forecast"]], use_container_width=True)
+# نحول الرابط لزر
+def make_clickable(link):
+    return f'<a href="{link}" target="_blank">عرض الرحلة</a>'
+
+df["الرابط"] = df["link"].apply(make_clickable)
+
+st.write("📋 جدول الرحلات")
+
+st.write(df[["الوقت","flights","passengers","forecast","الرابط"]].to_html(escape=False, index=False), unsafe_allow_html=True)
 
 # -----------------------------
 # 📈 رسم
 # -----------------------------
-st.line_chart(df.set_index("الوقت")[["flights","forecas
+st.line_chart(df.set_index("الوقت")[["flights","forecast
