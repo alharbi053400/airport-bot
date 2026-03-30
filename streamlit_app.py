@@ -26,7 +26,7 @@ def get_weather():
 temp = get_weather()
 
 # -----------------------------
-# 📊 بيانات (صالة 1 فقط)
+# 📊 بيانات (نفس القديمة)
 # -----------------------------
 now = dt.datetime.now()
 data = []
@@ -34,7 +34,7 @@ data = []
 for i in range(24):
     t = now + dt.timedelta(minutes=30*i)
 
-    base = 20  # صالة 1 (دولي)
+    base = 20  # صالة 1
 
     hour = t.hour
 
@@ -49,7 +49,7 @@ for i in range(24):
 df = pd.DataFrame(data, columns=["time","flights"])
 
 # -----------------------------
-# 🧠 التوقع
+# 🧠 التوقع (نفس القديم)
 # -----------------------------
 df["hour"] = df["time"].dt.hour
 
