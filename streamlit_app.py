@@ -2,9 +2,7 @@ import streamlit as st
 import pandas as pd
 import datetime as dt
 import requests
-from bs4 import BeautifulSoup
 import random
-import re
 
 st.set_page_config(layout="wide")
 
@@ -22,7 +20,6 @@ terminal = st.selectbox(
     ]
 )
 
-# زر تحديث
 if st.button("🔄 تحديث"):
     st.rerun()
 
@@ -40,17 +37,22 @@ def get_weather():
 temp = get_weather()
 
 # -----------------------------
-# 📡 بيانات حقيقية (محاولة)
+# 📡 بيانات حقيقية (OpenSky)
 # -----------------------------
 def get_real_data():
     try:
         url = "https://opensky-network.org/api/flights/arrival?airport=OEJN"
         r = requests.get(url, timeout=5)
 
+        # 🔍 Debug
+        st.write("STATUS:", r.status_code)
+
         if r.status_code != 200:
             return None
 
         data = r.json()
+
+        st.write("DATA LENGTH:", len(data) if data else 0)
 
         if not data:
             return None
@@ -101,67 +103,4 @@ def generate_ai_data():
             base *= 1.6
 
         flights = int(base + random.randint(-2, 2))
-
-        data.append([t, max(1, flights)])
-
-    df = pd.DataFrame(data, columns=["time","flights"])
-    return df
-
-# -----------------------------
-# 🎯 اختيار المصدر
-# -----------------------------
-df = get_real_data()
-
-if df is not None:
-    st.success("📡 بيانات حقيقية")
-else:
-    st.warning("⚠️ تم استخدام AI بدل البيانات الحقيقية")
-    df = generate_ai_data()
-
-# -----------------------------
-# 🧠 التوقع
-# -----------------------------
-df["hour"] = df["time"].dt.hour
-
-df["forecast"] = df["flights"] * (
-    1 +
-    (df["hour"].between(6,10))*0.3 +
-    (df["hour"].between(17,21))*0.4
-)
-
-if temp > 35:
-    df["forecast"] *= 1.1
-
-peak = int(df["flights"].max())
-future_peak = int(df["forecast"].max())
-
-# -----------------------------
-# 📊 مؤشرات
-# -----------------------------
-c1, c2, c3 = st.columns(3)
-
-c1.metric("✈️ الرحلات", int(df["flights"].sum()))
-c2.metric("📈 أعلى ضغط", peak)
-c3.metric("🔮 التوقع", future_peak)
-
-# -----------------------------
-# 🚨 تنبيه
-# -----------------------------
-if future_peak >= 25:
-    st.error("🚨 ضغط عالي جداً")
-elif future_peak >= 12:
-    st.warning("⚠️ ضغط متوسط")
-else:
-    st.success("✅ طبيعي")
-
-# -----------------------------
-# 📋 جدول
-# -----------------------------
-df["الوقت"] = df["time"].dt.strftime("%H:%M")
-
-st.dataframe(df[["الوقت","flights","forecast"]], use_container_width=True)
-
-# -----------------------------
-# 📈 رسم
-# -----------------------------
-st.line_chart(df.set_index("الوقت")[["flights","forecast"]])
+        data
