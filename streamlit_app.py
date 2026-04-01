@@ -40,8 +40,8 @@ def get_data():
 # =============================
 # 2️⃣ LOGIC LAYER
 # =============================
-df = get_data()
-df = analyze(df)
+def get_data()
+def analyze(df)
     df["forecast"] = df["flights"] * (
         1 +
         (df["hour"].between(6,10))*0.3 +
