@@ -1,108 +1,177 @@
 import streamlit as st
 import pandas as pd
+import requests
+from bs4 import BeautifulSoup
 import datetime as dt
 import random
 
 st.set_page_config(layout="wide")
 
-st.title("✈️ نظام تشغيل صالة 1 (دولي)")
+st.title("✈️ نظام تشغيل صالة 1 + AI + خريطة")
 
-# زر تحديث
-if st.button("🔄 تحديث"):
-    st.rerun()
-
-# زر البيانات الحقيقية
-st.link_button(
-    "📡 عرض الرحلات الحقيقية من المطار",
-    "https://www.kaia.sa/ar-SA/Flights/Departure"
-)
+URL = "https://www.kaia.sa/ar-SA/flights?tab=1"
 
 # -----------------------------
-# 🌍 وجهات
+# 📡 جلب الرحلات (محاولة)
 # -----------------------------
-destinations = [
-    "دبي", "القاهرة", "إسطنبول", "الرياض", "الدوحة"
-]
+@st.cache_data(ttl=60)
+def get_flights():
+    try:
+        res = requests.get(URL, timeout=10)
+        soup = BeautifulSoup(res.text, "html.parser")
 
-# -----------------------------
-# 📊 البيانات
-# -----------------------------
-now = dt.datetime.now()
-data = []
+        times = []
+        rows = soup.select("table tr")
 
-for i in range(24):
-    t = now + dt.timedelta(minutes=30*i)
+        for row in rows[1:]:
+            cols = row.find_all("td")
+            if len(cols) < 4:
+                continue
 
-    base = 20
-    hour = t.hour
+            t = cols[3].text.strip()
 
-    if 6 <= hour <= 10:
-        base *= 1.4
-    elif 17 <= hour <= 21:
-        base *= 1.6
+            try:
+                parsed = dt.datetime.strptime(t, "%H:%M")
+                times.append(parsed)
+            except:
+                continue
 
-    flights = int(base + random.randint(-2, 2))
-    passengers = flights * random.randint(120, 180)
+        return times
 
-    # الوجهة
-    destination = random.choice(destinations)
-
-    # التأخير (واقعي)
-    delay = random.choice([0, 0, 10, 15])
-
-    data.append([t, flights, passengers, destination, delay])
-
-df = pd.DataFrame(
-    data,
-    columns=["time","flights","passengers","destination","delay"]
-)
-
+    except:
+        return []
 
 # -----------------------------
-# 🧠 التوقع
+# 🧠 AI بسيط للتوقع
 # -----------------------------
-df["hour"] = df["time"].dt.hour
-
-df["forecast"] = df["flights"] * (
-    1 +
-    (df["hour"].between(6,10))*0.3 +
-    (df["hour"].between(17,21))*0.4
-)
+def predict_next(hour_counts):
+    predictions = []
+    for i in range(len(hour_counts)):
+        window = hour_counts[max(0, i-2):i+1]
+        avg = sum(window) / len(window)
+        predictions.append(round(avg, 1))
+    return predictions
 
 # -----------------------------
-# 📊 المؤشرات
+# 📊 معالجة البيانات
 # -----------------------------
-peak = int(df["flights"].max())
-future_peak = int(df["forecast"].max())
-total_passengers = int(df["passengers"].sum())
+data = get_flights()
 
-c1, c2, c3 = st.columns(3)
+if len(data) == 0:
+    st.warning("⚠️ يتم تشغيل وضع المحاكاة (البيانات غير متاحة حالياً)")
 
-c1.metric("✈️ الرحلات", int(df["flights"].sum()))
-c2.metric("👥 الركاب", total_passengers)
-c3.metric("📈 أعلى ضغط", peak)
+    now = dt.datetime.now()
+    data = [now + dt.timedelta(minutes=30*i) for i in range(48)]
+
+df = pd.DataFrame(data, columns=["time"])
+df["time"] = pd.to_datetime(df["time"], errors="coerce")
+df = df.dropna()
+
+df["slot"] = df["time"].dt.floor("30min")
+
+counts = df.groupby("slot").size().reset_index(name="flights")
+
+# -----------------------------
+# 🧠 AI prediction
+# -----------------------------
+counts["prediction"] = predict_next(counts["flights"].tolist())
+
+# -----------------------------
+# ⚙️ تحليل التشغيل
+# -----------------------------
+result = []
+
+for _, row in counts.iterrows():
+    f = row["prediction"]
+    total = min(int(f * 3), 60)
+
+    if f >= 20:
+        level = "🔴 عالي"
+        dist = 4
+        counters = 60
+        decision = "🚨 تدخل فوري"
+    elif f >= 10:
+        level = "🟡 متوسط"
+        dist = 3
+        counters = 50
+        decision = "تعزيز"
+    else:
+        level = "🟢 طبيعي"
+        dist = 2
+        counters = 40
+        decision = "تشغيل طبيعي"
+
+    result.append([
+        row["slot"],
+        round(f,1),
+        total,
+        level,
+        dist,
+        counters,
+        decision
+    ])
+
+final_df = pd.DataFrame(result, columns=[
+    "الوقت", "الرحلات", "الموظفين",
+    "الحالة", "الدعم", "الكونترات", "القرار"
+])
+
+# -----------------------------
+# 📊 مؤشرات
+# -----------------------------
+st.subheader("📊 مؤشرات التشغيل")
+
+col1, col2, col3 = st.columns(3)
+
+col1.metric("إجمالي الرحلات", int(final_df["الرحلات"].sum()))
+col2.metric("أعلى ضغط", int(final_df["الرحلات"].max()))
+col3.metric("توقع الذروة", int(final_df["الرحلات"].max()))
 
 # -----------------------------
 # 🚨 تنبيه
 # -----------------------------
-if future_peak >= 25:
-    st.error("🚨 ضغط عالي جداً")
-elif future_peak >= 12:
-    st.warning("⚠️ ضغط متوسط")
-else:
-    st.success("✅ طبيعي")
+if final_df["الرحلات"].max() >= 20:
+    st.error("🚨 ضغط عالي جداً - تدخل فوري")
 
 # -----------------------------
-# 📋 جدول
+# 📋 الجدول
 # -----------------------------
-df["الوقت"] = df["time"].dt.strftime("%H:%M")
+st.subheader("📋 لوحة التشغيل")
+st.dataframe(final_df, use_container_width=True)
 
-st.dataframe(
-    df[["الوقت","destination","flights","passengers","delay","forecast"]],
+# -----------------------------
+# 📈 الرسم
+# -----------------------------
+st.subheader("📈 الحركة")
+st.line_chart(final_df.set_index("الوقت")["الرحلات"])
+
+# -----------------------------
+# 🗺️ الخريطة (محاكاة)
+# -----------------------------
+st.subheader("🗺️ الطائرات حول جدة (محاكاة)")
+
+st.image(
+    "https://upload.wikimedia.org/wikipedia/commons/6/6f/Jeddah_map.png",
     use_container_width=True
 )
 
+planes = []
+
+for i in range(random.randint(5, 15)):
+    lat = 21.3 + random.uniform(-0.3, 0.3)
+    lon = 39.1 + random.uniform(-0.3, 0.3)
+
+    planes.append({
+        "الطائرة": f"FLT{i}",
+        "الموقع": f"{lat:.2f}, {lon:.2f}",
+        "الوصول": f"{random.randint(10,90)} دقيقة"
+    })
+
+planes_df = pd.DataFrame(planes)
+
+st.dataframe(planes_df, use_container_width=True)
+
 # -----------------------------
-# 📈 رسم
+# ⏱️ آخر تحديث
 # -----------------------------
-st.line_chart(df.set_index("الوقت")[["flights", "forecast"]])
+st.caption(f"آخر تحديث: {dt.datetime.now().strftime('%H:%M:%S')}")
