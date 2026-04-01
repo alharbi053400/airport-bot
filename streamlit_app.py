@@ -4,30 +4,12 @@ import requests
 import datetime as dt
 import random
 import re
-import os
 
 st.set_page_config(layout="wide")
-st.title("✈️ نظام تحليل الرحلات - AI متعلم")
-
-st.caption(f"آخر تحديث: {dt.datetime.now().strftime('%H:%M:%S')}")
+st.title("✈️ نظام تحليل الرحلات - صالة 1")
 
 # =========================
-# تحميل البيانات القديمة
-# =========================
-DATA_FILE = "history.csv"
-
-def load_history():
-    if os.path.exists(DATA_FILE):
-        return pd.read_csv(DATA_FILE)
-    return pd.DataFrame(columns=["time","flights"])
-
-def save_history(df):
-    history = load_history()
-    combined = pd.concat([history, df])
-    combined.to_csv(DATA_FILE, index=False)
-
-# =========================
-# KAIA
+# KAIA (محاولة سحب)
 # =========================
 def get_kaia_flights():
     url = "https://www.kaia.sa/ar-SA/flights?tab=1"
@@ -38,15 +20,18 @@ def get_kaia_flights():
         matches = re.findall(r"\d{2}:\d{2}", res.text)
 
         for m in matches:
-            parsed = dt.datetime.strptime(m, "%H:%M")
-            times.append(parsed)
+            try:
+                parsed = dt.datetime.strptime(m, "%H:%M")
+                times.append(parsed)
+            except:
+                continue
     except:
         pass
 
     return times
 
 # =========================
-# fallback
+# fallback ذكي
 # =========================
 def fallback():
     now = dt.datetime.now()
@@ -62,48 +47,44 @@ def fallback():
     return times
 
 # =========================
-# AI تعلم من البيانات
+# AI تصحيح
 # =========================
-def ai_learning_predict(df):
+def ai_correction(df):
 
-    history = load_history()
-
-    if len(history) < 20:
-        df["forecast"] = df["flights"] * 1.2
-        return df
-
-    history["time"] = pd.to_datetime(history["time"])
-    history["hour"] = history["time"].dt.hour
-
-    avg_by_hour = history.groupby("hour")["flights"].mean()
-
-    predictions = []
+    corrected = []
 
     for _, row in df.iterrows():
-        hour = row["slot"].hour
+
         base = row["flights"]
+        hour = row["slot"].hour
 
-        if hour in avg_by_hour:
-            learned = avg_by_hour[hour]
-            pred = int((base + learned) / 2)
+        if 6 <= hour <= 10:
+            factor = 1.3
+        elif 17 <= hour <= 23:
+            factor = 1.5
         else:
-            pred = int(base * 1.2)
+            factor = 1.1
 
-        predictions.append(pred)
+        new_val = int(base * factor)
 
-    df["forecast"] = predictions
+        if new_val < base:
+            new_val = base
+
+        corrected.append(new_val)
+
+    df["ai_flights"] = corrected
     return df
 
 # =========================
-# تشغيل
+# تشغيل البيانات
 # =========================
 data = get_kaia_flights()
 
 if len(data) < 10:
     data = fallback()
-    st.warning("⚠️ تشغيل محاكاة")
+    st.warning("⚠️ تشغيل محاكاة ذكية")
 else:
-    st.success("✅ بيانات حقيقية")
+    st.success("✅ بيانات من الموقع")
 
 df = pd.DataFrame(data, columns=["time"])
 df["time"] = pd.to_datetime(df["time"], errors="coerce")
@@ -113,44 +94,28 @@ df["slot"] = df["time"].dt.floor("30min")
 
 counts = df.groupby("slot").size().reset_index(name="flights")
 
-# حفظ للتعلم
-save_history(counts.rename(columns={"slot":"time"}))
-
-# AI تعلم
-counts = ai_learning_predict(counts)
+# AI
+counts = ai_correction(counts)
 
 # =========================
-# عرض المقارنة
+# مقارنة AI
 # =========================
-st.subheader("🤖 AI يتعلم من البيانات")
+st.subheader("🤖 تصحيح الذكاء الصناعي")
 
-compare = counts.copy()
-compare["الوقت"] = compare["slot"].dt.strftime("%H:%M")
-compare = compare[["الوقت","flights","forecast"]]
-compare.columns = ["الوقت","الحالي","توقع AI"]
+compare_df = counts[["slot","flights","ai_flights"]].copy()
+compare_df.columns = ["الوقت","الفعلي","بعد AI"]
+compare_df["الوقت"] = compare_df["الوقت"].dt.strftime("%H:%M")
 
-st.dataframe(compare, use_container_width=True)
-
-# =========================
-# تنبيه
-# =========================
-future_max = counts["forecast"].max()
-
-if future_max >= 20:
-    st.error(f"🚨 ضغط عالي متوقع ({future_max})")
-elif future_max >= 10:
-    st.warning(f"⚠️ ضغط متوسط ({future_max})")
-else:
-    st.success("✅ الوضع مستقر")
+st.dataframe(compare_df, use_container_width=True)
 
 # =========================
-# تحليل
+# التحليل
 # =========================
 result = []
 
 for _, row in counts.iterrows():
 
-    f = row["forecast"]
+    f = row["ai_flights"]
 
     if f >= 20:
         level = "🔴 عالي"
@@ -177,15 +142,8 @@ final_df = pd.DataFrame(result, columns=[
     "الوقت","الرحلات","الحالة","الكونترات","الدعم"
 ])
 
+final_df = final_df.sort_values("الوقت")
 final_df["الوقت"] = final_df["الوقت"].dt.strftime("%H:%M")
-
-# =========================
-# KPI
-# =========================
-c1,c2,c3 = st.columns(3)
-c1.metric("إجمالي الرحلات", int(final_df["الرحلات"].sum()))
-c2.metric("أعلى ضغط", int(final_df["الرحلات"].max()))
-c3.metric("توقع الذروة", int(future_max))
 
 # =========================
 # عرض
@@ -195,5 +153,4 @@ st.subheader("📊 لوحة التشغيل")
 st.dataframe(final_df, use_container_width=True)
 
 st.subheader("📈 الحركة")
-
 st.area_chart(final_df.set_index("الوقت")["الرحلات"])
