@@ -57,6 +57,7 @@ df = pd.DataFrame(
     columns=["time","flights","passengers","destination","delay"]
 )
 
+
 # -----------------------------
 # 🧠 التوقع
 # -----------------------------
@@ -104,4 +105,4 @@ st.dataframe(
 # -----------------------------
 # 📈 رسم
 # -----------------------------
-st.line_chart(df.set_index("الوقت")[["flights","forecast"]])
+st.line_chart(df.set_index("الوقت")[["flights"
