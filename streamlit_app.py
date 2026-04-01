@@ -5,115 +5,89 @@ import random
 
 st.set_page_config(layout="wide")
 
-st.title("✈️ نظام تشغيل صالة 1 (دولي)")
+st.title("✈️ نظام تشغيل الرحلات")
 
 # =============================
-# 1️⃣ DATA LAYER
+# بيانات تشغيل (مثل PDF)
 # =============================
 def get_data():
     now = dt.datetime.now()
-    data = []
 
     destinations = [
-        "دبي","القاهرة","إسطنبول","لندن","الدوحة",
-        "جاكرتا","لاهور","كراتشي"
+        "لاهور","لندن هيثرو","القاهرة","كراتشي",
+        "إسلام آباد","تونس","أبوظبي","عمان",
+        "كوالالمبور","دكا","دبي","جاكرتا","الجزائر"
     ]
 
-    for i in range(24):
-        t = now + dt.timedelta(minutes=30*i)
+    airlines = ["Saudia","Flynas","Emirates","Qatar","Turkish"]
 
-        flights = random.randint(18, 25)
-        passengers = flights * random.randint(120, 180)
+    data = []
+
+    for i in range(20):
+        t = now + dt.timedelta(minutes=15*i)
 
         destination = random.choice(destinations)
-        delay = random.choice([0, 0, 10, 15, 20])
+        flight_number = f"{random.choice(['SV','XY','EK','QR','TK'])}{random.randint(100,999)}"
 
-        data.append([t, destination, flights, passengers, delay])
+        delay = random.choice([0, 0, 10, 20, 30])
+
+        # الحالة
+        if delay > 0:
+            status = "متأخرة"
+        else:
+            status = random.choice(["وصلت","في موعدها","جاري الوصول"])
+
+        delay_time = ""
+        if delay > 0:
+            delay_time = (t + dt.timedelta(minutes=delay)).strftime("%H:%M")
+
+        data.append([
+            t.strftime("%H:%M"),
+            destination,
+            flight_number,
+            status,
+            delay_time
+        ])
 
     df = pd.DataFrame(
         data,
-        columns=["time","destination","flights","passengers","delay"]
+        columns=["الوقت","الوجهة","رقم الرحلة","الحالة","وقت التأخير"]
     )
 
     return df
 
-# =============================
-# 2️⃣ LOGIC LAYER
-# =============================
-def analyze(df):
-    df["hour"] = df["time"].dt.hour
-
-    df["forecast"] = df["flights"] * (
-        1 +
-        (df["hour"].between(6,10))*0.3 +
-        (df["hour"].between(17,21))*0.4
-    )
-
-    # تأثير التأخير
-    df["forecast"] += df["delay"] * 0.2
-
-    return df
-
-# =============================
-# 3️⃣ UI LAYER
-# =============================
 df = get_data()
-df = analyze(df)
 
-# ✈️ الرحلات المتأخرة فقط
-delayed_df = df[df["delay"] > 0]
+# =============================
+# جدول التشغيل
+# =============================
+st.subheader("📋 الرحلات")
 
-df["الوقت"] = df["time"].dt.strftime("%H:%M")
+st.dataframe(df, use_container_width=True)
 
-# -----------------------------
-# 📊 مؤشرات
-# -----------------------------
-total_flights = int(df["flights"].sum())
-total_passengers = int(df["passengers"].sum())
-total_delay = int(df["delay"].sum())
+# =============================
+# تحليل التشغيل
+# =============================
+st.subheader("📊 تحليل التشغيل")
 
-c1, c2, c3 = st.columns(3)
+# عدد المتأخر
+delayed_count = df[df["الحالة"] == "متأخرة"].shape[0]
 
-c1.metric("✈️ الرحلات", total_flights)
-c2.metric("👥 الركاب", total_passengers)
-c3.metric("⏱️ التأخير", total_delay)
-
-# -----------------------------
-# 🚨 تنبيه
-# -----------------------------
-if total_delay > 200:
-    st.error("🚨 تأخير عالي")
-elif total_delay > 100:
-    st.warning("⚠️ تأخير متوسط")
+# الضغط
+if delayed_count >= 7:
+    level = "🔴 مرتفع"
+    staff = 8
+elif delayed_count >= 4:
+    level = "🟡 متوسط"
+    staff = 5
 else:
-    st.success("✅ طبيعي")
+    level = "🟢 منخفض"
+    staff = 3
 
-# -----------------------------
-# 📋 الجدول الرئيسي
-# -----------------------------
-st.subheader("📋 جميع الرحلات")
+col1, col2, col3 = st.columns(3)
 
-st.dataframe(
-    df[["الوقت","destination","flights","passengers","delay","forecast"]],
-    use_container_width=True
-)
+col1.metric("عدد الرحلات", len(df))
+col2.metric("عدد المتأخرة", delayed_count)
+col3.metric("عدد الموظفين المقترح", staff)
 
-# -----------------------------
-# 🚨 الرحلات المتأخرة
-# -----------------------------
-st.subheader("🚨 الرحلات المتأخرة")
-
-if delayed_df.empty:
-    st.success("✅ لا توجد رحلات متأخرة")
-else:
-    delayed_df["الوقت"] = delayed_df["time"].dt.strftime("%H:%M")
-
-    st.dataframe(
-        delayed_df[["الوقت","destination","delay","flights","passengers"]],
-        use_container_width=True
-    )
-
-# -----------------------------
-# 📈 الرسم
-# -----------------------------
-st.line_chart(df.set_index("الوقت")[["flights","forecast"]])
+st.write(f"مستوى الضغط: {level}")
