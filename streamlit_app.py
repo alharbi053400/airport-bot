@@ -40,8 +40,9 @@ def get_data():
 # =============================
 # 2️⃣ LOGIC LAYER
 # =============================
-def get_data()
-def analyze(df)
+def analyze(df):
+    df["hour"] = df["time"].dt.hour
+
     df["forecast"] = df["flights"] * (
         1 +
         (df["hour"].between(6,10))*0.3 +
@@ -59,9 +60,14 @@ def analyze(df)
 df = get_data()
 df = analyze(df)
 
+# ✈️ الرحلات المتأخرة فقط
+delayed_df = df[df["delay"] > 0]
+
 df["الوقت"] = df["time"].dt.strftime("%H:%M")
 
-# مؤشرات
+# -----------------------------
+# 📊 مؤشرات
+# -----------------------------
 total_flights = int(df["flights"].sum())
 total_passengers = int(df["passengers"].sum())
 total_delay = int(df["delay"].sum())
@@ -72,7 +78,9 @@ c1.metric("✈️ الرحلات", total_flights)
 c2.metric("👥 الركاب", total_passengers)
 c3.metric("⏱️ التأخير", total_delay)
 
-# تنبيه
+# -----------------------------
+# 🚨 تنبيه
+# -----------------------------
 if total_delay > 200:
     st.error("🚨 تأخير عالي")
 elif total_delay > 100:
@@ -80,11 +88,32 @@ elif total_delay > 100:
 else:
     st.success("✅ طبيعي")
 
-# جدول
+# -----------------------------
+# 📋 الجدول الرئيسي
+# -----------------------------
+st.subheader("📋 جميع الرحلات")
+
 st.dataframe(
     df[["الوقت","destination","flights","passengers","delay","forecast"]],
     use_container_width=True
 )
 
-# رسم
+# -----------------------------
+# 🚨 الرحلات المتأخرة
+# -----------------------------
+st.subheader("🚨 الرحلات المتأخرة")
+
+if delayed_df.empty:
+    st.success("✅ لا توجد رحلات متأخرة")
+else:
+    delayed_df["الوقت"] = delayed_df["time"].dt.strftime("%H:%M")
+
+    st.dataframe(
+        delayed_df[["الوقت","destination","delay","flights","passengers"]],
+        use_container_width=True
+    )
+
+# -----------------------------
+# 📈 الرسم
+# -----------------------------
 st.line_chart(df.set_index("الوقت")[["flights","forecast"]])
