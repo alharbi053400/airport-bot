@@ -118,7 +118,7 @@ def main():
 
             print("✅ تم بنجاح")
 
-        except Exception as e:
+    except Exception as e:
             print("❌ خطأ:", e)
 
         time.sleep(300)  # كل 5 دقائق
