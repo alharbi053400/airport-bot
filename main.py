@@ -112,7 +112,7 @@ def main():
         flights = filter_flights(data)
         times = analyze(flights)
 
-        file =create_excel(times)send_file(file)
+        file = create_excel(times)send_file(file)
 
             print("✅ تم بنجاح")
 
