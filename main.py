@@ -1,22 +1,30 @@
-print("🔥🔥🔥 اشتغل الملف 🔥🔥🔥")
 import requests
 import pandas as pd
 import time
+import os
 from datetime import datetime
 
-TOKEN = "8714913319:AAF7lWfrtPbWItM-7sj0JhYMVN9zdPofGd8"
-CHAT_ID = "1234119654"
-API_KEY = "02b0bd12fc73d4c2b7741a7e2f3f6685"
+# 🔐 متغيرات آمنة
+TOKEN = os.getenv("TOKEN")
+CHAT_ID = os.getenv("CHAT_ID")
+API_KEY = os.getenv("API_KEY")
 
 API_URL = "http://api.aviationstack.com/v1/flights"
 
+SAUDI_AIRPORTS = [
+    "RUH","DMM","MED","GIZ","TUU","AHB","EAM","HAS",
+    "ELQ","URY","AJF","ULH","RAE","SHW","NUM","DWD"
+]
+
+# 📤 إرسال الملف
 def send_file(file_path):
-    print("📤 إرسال الملف...")
+    print("📤 جاري إرسال الملف...")
     url = f"https://api.telegram.org/bot{TOKEN}/sendDocument"
     with open(file_path, "rb") as f:
         res = requests.post(url, data={"chat_id": CHAT_ID}, files={"document": f})
-    print("📨 Telegram:", res.text)
+    print("📨 تم الإرسال:", res.status_code)
 
+# ✈️ جلب الرحلات
 def get_flights():
     print("🌐 جلب البيانات...")
     params = {
@@ -24,52 +32,96 @@ def get_flights():
         "dep_iata": "JED"
     }
     res = requests.get(API_URL, params=params)
-    print("📡 STATUS:", res.status_code)
+    print("📡 Status:", res.status_code)
     return res.json()
 
+# 🔎 فلترة
 def filter_flights(data):
-    flights = []
+    flights = data.get("data", [])
+    result = []
 
-    for f in data.get("data", []):
-        flights.append({
-            "رقم الرحلة": f.get("flight", {}).get("iata"),
-            "شركة الطيران": f.get("airline", {}).get("name"),
-            "من": f.get("departure", {}).get("airport"),
-            "إلى": f.get("arrival", {}).get("airport"),
-            "الوقت": f.get("departure", {}).get("scheduled"),
-            "الحالة": f.get("flight_status")
+    for f in flights:
+        dep = f.get("departure", {})
+        arr = f.get("arrival", {})
+
+        if dep.get("terminal") != "1":
+            continue
+
+        if arr.get("iata") in SAUDI_AIRPORTS:
+            continue
+
+        result.append(f) كل
+
+    print("📊 بعد الفلترة:", len(result))
+    return result
+
+# 📈 تحليل
+def analyze(flights):
+    times = {}
+
+    for f in flights:
+        time_str = f.get("departure", {}).get("scheduled")
+        if not time_str:
+            continue
+
+        try:
+            t = datetime.fromisoformat(time_str.replace("Z", "+00:00"))
+            minute = "00" if t.minute < 30 else "30"
+            key = t.strftime(f"%H:{minute}")
+            times[key] = times.get(key, 0) + 1
+        except:
+            continue
+
+    print("📈 التحليل:", times)
+    return times
+
+# 📁 إنشاء Excel
+def create_excel(times):
+    rows = []
+
+    for t, count in sorted(times.items()):
+        if count >=  6:
+            status = "زحمة خانقة"
+        elif count >= 3:
+            status = "زحمة"
+        else:
+            status = "طبيعي"
+
+        rows.append({
+            "الوقت": t,
+            "عدد الرحلات": count,
+            "الحالة": status
         })
 
-    print("✈️ عدد الرحلات:", len(flights))
-    return flights
+    if not rows:
+        rows = [{"ملاحظة": "لا توجد بيانات"}]
 
-def create_excel(flights):
-    if not flights:
-        flights = [{"ملاحظة": "لا توجد بيانات"}]
-
-    df = pd.DataFrame(flights)
+    df = pd.DataFrame(rows)
     filename = f"report_{datetime.now().strftime('%H_%M')}.xlsx"
     df.to_excel(filename, index=False)
 
+    print("📁 تم إنشاء:", filename)
     return filename
 
+# 🚀 التشغيل
 def main():
-    print("🚀 البوت اشتغل")
+    print("🚀 بدء التشغيل")
 
     while True:
         try:
             data = get_flights()
             flights = filter_flights(data)
+            times = analyze(flights)
 
-            file = create_excel(flights)
+            file = create_excel(times)
             send_file(file)
 
-            print("✅ تم الإرسال")
+            print("✅ تم بنجاح")
 
         except Exception as e:
-            print("❌ خطأ:", str(e))
+            print("❌ خطأ:", e)
 
-        time.sleep(10)
+        time.sleep(300)  # كل 5 دقائق
 
-if __name__=="__main__":
+if __name__ == "__main__":
     main()
