@@ -110,3 +110,20 @@ def main():
 
 # تشغيل
 main()
+def create_excel(data):
+    import pandas as pd
+    from datetime import datetime
+
+    df = pd.DataFrame([{"حالة": "شغال"}])
+    filename = f"test_{datetime.now().strftime('%H_%M')}.xlsx"
+    df.to_excel(filename, index=False)
+    return filename
+
+
+def main():
+    file = create_excel([])
+    send_file(file)
+    print("تم الإرسال")
+
+
+main()
