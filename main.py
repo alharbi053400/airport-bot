@@ -1,0 +1,89 @@
+import requests
+import pandas as pd
+import time
+from datetime import datetime
+
+# 🔑 بياناتك
+TOKEN = "8714913319:AAF7lWfrtPbWItM-7sj0JhYMVN9zdPofGd8"
+CHAT_ID = "1234119654"
+API_KEY = "02b0bd12fc73d4c2b7741a7e2f3f6685"
+
+API_URL = "http://api.aviationstack.com/v1/flights"
+
+
+# 📤 إرسال ملف تيليجرام
+def send_file(file_path):
+    url = f"https://api.telegram.org/bot{TOKEN}/sendDocument"
+    with open(file_path, "rb") as f:
+        res = requests.post(url, data={"chat_id": CHAT_ID}, files={"document": f})
+    print("📨 Telegram:", res.status_code)
+
+
+# 🌐 جلب الرحلات
+def get_flights():
+    params = {
+        "access_key": API_KEY,
+        "dep_iata": "JED"
+    }
+    res = requests.get(API_URL, params=params)
+
+    if res.status_code != 200:
+        print("❌ API Error:", res.status_code)
+        return {}
+
+    return res.json()
+
+
+# 🔍 تجهيز البيانات
+def filter_flights(data):
+    flights = []
+
+    for f in data.get("data", []):
+        flights.append({
+            "رقم الرحلة": f.get("flight", {}).get("iata"),
+            "شركة الطيران": f.get("airline", {}).get("name"),
+            "من": f.get("departure", {}).get("airport"),
+            "إلى": f.get("arrival", {}).get("airport"),
+            "الوقت": f.get("departure", {}).get("scheduled"),
+            "الحالة": f.get("flight_status")
+        })
+
+    print(f"✈️ تم جلب {len(flights)} رحلة")
+    return flights
+
+
+# 📊 إنشاء Excel
+def create_excel(flights):
+    if not flights:
+        flights = [{"ملاحظة": "لا توجد بيانات"}]
+
+    df = pd.DataFrame(flights)
+
+    filename = f"report_{datetime.now().strftime('%H_%M')}.xlsx"
+    df.to_excel(filename, index=False)
+
+    return filename
+
+
+# 🚀 التشغيل الرئيسي
+def main():
+    print("🚀 البوت بدأ التشغيل")
+
+    while True:
+        try:
+            data = get_flights()
+            flights = filter_flights(data)
+
+            file = create_excel(flights)
+            send_file(file)
+
+            print("✅ تم الإرسال")
+
+        except Exception as e:
+            print("❌ خطأ:", str(e))
+
+        time.sleep(60)  # كل دقيقة (جربها أول)
+
+
+if __name__ == "__main__":
+    main()
