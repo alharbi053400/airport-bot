@@ -4,12 +4,12 @@ import time
 from datetime import datetime
 
 # ==============================
-# بياناتك (حط القيم الحقيقية)
+# بياناتك
 # ==============================
-TOKEN = "PUT_YOUR_TELEGRAM_TOKEN"
-CHAT_ID = "PUT_YOUR_CHAT_ID"
-API_KEY = "PUT_YOUR_AVIATIONSTACK_KEY"
 
+TOKEN = "8714913319:AAF71WfrtPbWItM-7sj0JhYMVN9zdPoFGd8"
+CHAT_ID = "1234119654"
+API_KEY = "02b0bd12fc73d4c2b7741a7e2f3f6685"
 API_URL = "http://api.aviationstack.com/v1/flights"
 
 
