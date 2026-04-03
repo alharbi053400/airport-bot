@@ -1,20 +1,27 @@
 def main():
     print("🚀 بدأ التشغيل")
 
-    try:
-        data = get_flights()
-        print("جاب البيانات")
+    while True:
+        try:
+            print("🔄 تحديث جديد...")
 
-        flights = filter_flights(data)
-        print("فلترها")
+            data = get_flights()
+            print("جاب البيانات")
 
-        file = create_excel(flights)
-        print("سوى ملف")
+            flights = filter_flights(data)
+            print("فلترها")
 
-        send_file(file)
-        print("تم الإرسال ✅")
+            file = create_excel(flights)
+            print("سوى ملف")
 
-    except Exception as e:
-        print("🔥 خطأ:", e)
+            send_file(file)
+            print("تم الإرسال ✅")
+
+        except Exception as e:
+            print("🔥 خطأ:", e)
+
+        # ⏱️ انتظار 30 دقيقة
+        time.sleep(1800)
+
 
 main()
