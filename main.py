@@ -3,38 +3,29 @@ import pandas as pd
 import time
 from datetime import datetime
 
-# 🔑 بياناتك
 TOKEN = "8714913319:AAF7lWfrtPbWItM-7sj0JhYMVN9zdPofGd8"
 CHAT_ID = "1234119654"
 API_KEY = "02b0bd12fc73d4c2b7741a7e2f3f6685"
 
 API_URL = "http://api.aviationstack.com/v1/flights"
 
-
-# 📤 إرسال ملف تيليجرام
 def send_file(file_path):
+    print("📤 إرسال الملف...")
     url = f"https://api.telegram.org/bot{TOKEN}/sendDocument"
     with open(file_path, "rb") as f:
         res = requests.post(url, data={"chat_id": CHAT_ID}, files={"document": f})
-    print("📨 Telegram:", res.status_code)
+    print("📨 Telegram:", res.text)
 
-
-# 🌐 جلب الرحلات
 def get_flights():
+    print("🌐 جلب البيانات...")
     params = {
         "access_key": API_KEY,
         "dep_iata": "JED"
     }
     res = requests.get(API_URL, params=params)
-
-    if res.status_code != 200:
-        print("❌ API Error:", res.status_code)
-        return {}
-
+    print("📡 STATUS:", res.status_code)
     return res.json()
 
-
-# 🔍 تجهيز البيانات
 def filter_flights(data):
     flights = []
 
@@ -48,26 +39,21 @@ def filter_flights(data):
             "الحالة": f.get("flight_status")
         })
 
-    print(f"✈️ تم جلب {len(flights)} رحلة")
+    print("✈️ عدد الرحلات:", len(flights))
     return flights
 
-
-# 📊 إنشاء Excel
 def create_excel(flights):
     if not flights:
         flights = [{"ملاحظة": "لا توجد بيانات"}]
 
     df = pd.DataFrame(flights)
-
     filename = f"report_{datetime.now().strftime('%H_%M')}.xlsx"
     df.to_excel(filename, index=False)
 
     return filename
 
-
-# 🚀 التشغيل الرئيسي
 def main():
-    print("🚀 البوت بدأ التشغيل")
+    print("🚀 البوت اشتغل")
 
     while True:
         try:
@@ -82,8 +68,7 @@ def main():
         except Exception as e:
             print("❌ خطأ:", str(e))
 
-        time.sleep(60)  # كل دقيقة (جربها أول)
-
+        time.sleep(60)
 
 if __name__ == "__main__":
     main()
