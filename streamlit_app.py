@@ -1,10 +1,13 @@
+import streamlit as st
 import requests
-import time
 from datetime import datetime
+import pandas as pd
+import time
 
-TOKEN = "8714913319:AAF7lWfrtPbWItM-7sj0JhYMVN9zdPofGd8"
-CHAT_ID = "1234119654"
-API_KEY = "02b0bd12fc73d4c2b7741a7e2f3f6685"
+# 🔐 Secrets
+TOKEN = st.secrets["TELEGRAM_TOKEN"]
+CHAT_ID = st.secrets["CHAT_ID"]
+API_KEY = st.secrets["API_KEY"]
 
 API_URL = "http://api.aviationstack.com/v1/flights"
 
@@ -13,17 +16,8 @@ SAUDI_AIRPORTS = [
     "ELQ","URY","AJF","ULH","RAE","SHW","NUM","DWD"
 ]
 
-last_report = ""
-last_alerts = set()
-cached_flights = []
-last_fetch_time = 0
-
-
-def send_telegram(message):
-    url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
-    requests.post(url, data={"chat_id": CHAT_ID, "text": message})
-
-
+# 📡 جلب البيانات
+@st.cache_data(ttl=7200)
 def get_flights():
     params = {
         "access_key": API_KEY,
@@ -32,7 +26,7 @@ def get_flights():
     response = requests.get(API_URL, params=params)
     return response.json()
 
-
+# ✈️ فلترة
 def filter_flights(data):
     flights = data.get("data", [])
     result = []
@@ -51,8 +45,8 @@ def filter_flights(data):
 
     return result
 
-
-def generate_report(flights):
+# 📊 تحليل
+def analyze(flights):
     times = {}
 
     for f in flights:
@@ -66,93 +60,94 @@ def generate_report(flights):
 
         times[key] = times.get(key, 0) + 1
 
-    report = "📊 تقرير الرحلات - صالة 1 (دولي)\n"
-    report += "👤 ريان الحميدي الحربي | 📞 0534006391\n\n"
+    return times
 
-    total = len(flights)
-    report += f"✈️ عدد الرحلات: {total}\n\n"
+# 🔮 توقع
+def predict(times):
+    pred = {}
+    keys = sorted(times.keys())
 
-    alerts = []
+    for i in range(len(keys)):
+        now = times[keys[i]]
 
-    # تحليل
-    max_time = ""
-    max_count = 0
-    min_time = ""
-    min_count = 999
-
-    for t in sorted(times):
-        count = times[t]
-
-        if count > max_count:
-            max_count = count
-            max_time = t
-
-        if count < min_count:
-            min_count = count
-            min_time = t
-
-        if count >= 5:
-            status = "🚨 زحمة خانقة"
-            alerts.append(f"🚨 زحمة خانقة {t} ({count})")
-        elif count >= 3:
-            status = "⚠️ زحمة"
+        if i < len(keys)-1:
+            nxt = times[keys[i+1]]
+            pred[keys[i]] = int((now + nxt) / 2)
         else:
-            status = "✅ طبيعي"
+            pred[keys[i]] = now
 
-        report += f"{t} → {count} رحلات ({status})\n"
+    return pred
 
-    # 🔥 إضافة التحليل
-    report += "\n📈 التحليل:\n"
-    report += f"🔥 أعلى زحمة: {max_time} ({max_count} رحلات)\n"
-    report += f"😌 أهدأ وقت: {min_time} ({min_count} رحلات)\n"
+# 🤖 ارسال تلجرام
+def send_telegram(msg):
+    url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
+    requests.post(url, data={"chat_id": CHAT_ID, "text": msg})
 
-    return report, alerts
+# ================= UI =================
 
+st.set_page_config(page_title="Airport Dashboard", layout="wide")
 
-def main_loop():
-    global last_report, last_alerts, cached_flights, last_fetch_time
+st.title("✈️ Dashboard صالة 1 (دولي)")
+st.markdown("👤 ريان الحميدي الحربي | 📞 0534006391")
 
-    send_telegram("📡 تم تشغيل النظام\n👤 ريان الحميدي الحربي\n📞 0534006391")
+# تحديث تلقائي
+refresh = st.button("🔄 تحديث الآن")
 
-    while True:
-        try:
-            now = time.time()
+data = get_flights()
+flights = filter_flights(data)
+times = analyze(flights)
+prediction = predict(times)
 
-            # تحديث كل ساعتين
-            if now - last_fetch_time >= 7200 or not cached_flights:
-                data = get_flights()
-                cached_flights = filter_flights(data)
-                last_fetch_time = now
-                send_telegram("🔄 تم تحديث بيانات الرحلات")
+# 📊 احصائيات
+col1, col2, col3 = st.columns(3)
 
-            # تقرير كل 30 دقيقة
-            report, alerts = generate_report(cached_flights)
+total = len(flights)
+peak = max(times.values()) if times else 0
+low = min(times.values()) if times else 0
 
-            if report != last_report:
-                send_telegram(report)
-                last_report = report
+col1.metric("✈️ عدد الرحلات", total)
+col2.metric("🔥 أعلى زحمة", peak)
+col3.metric("😌 أهدأ وقت", low)
 
-            current_alerts = set(alerts)
+# 📈 رسم
+if times:
+    df = pd.DataFrame({
+        "Time": list(times.keys()),
+        "Flights": list(times.values())
+    })
 
-            for alert in current_alerts - last_alerts:
-                send_telegram(alert)
+    st.subheader("📊 الزحمة")
+    st.line_chart(df.set_index("Time"))
 
-            last_alerts = current_alerts
+# 🔮 التوقع
+if prediction:
+    st.subheader("🔮 التوقع القادم")
+    df2 = pd.DataFrame({
+        "Time": list(prediction.keys()),
+        "Predicted": list(prediction.values())
+    })
 
-        except Exception as e:
-            send_telegram(f"❌ خطأ\nريان الحميدي الحربي\n0534006391\n{str(e)}")
+    st.line_chart(df2.set_index("Time"))
 
-        time.sleep(1800)
+# 🚨 تنبيه
+for t, count in times.items():
+    if count >= 5:
+        st.error(f"🚨 زحمة خانقة {t} ({count})")
+    elif count >= 3:
+        st.warning(f"⚠️ زحمة {t} ({count})")
+    else:
+        st.success(f"✅ طبيعي {t} ({count})")
 
+# 📤 ارسال تقرير
+if st.button("📤 ارسال تقرير تيليجرام"):
+    report = f"📊 تقرير صالة 1\n✈️ {total} رحلات\n"
 
-def run_forever():
-    while True:
-        try:
-            main_loop()
-        except Exception as e:
-            send_telegram(f"🔥 إعادة تشغيل السيرفر\n{str(e)}")
-            time.sleep(10)
+    for t, c in times.items():
+        report += f"{t} → {c}\n"
 
+    send_telegram(report)
+    st.success("تم الإرسال ✅")
 
-if __name__ == "__main__":
-    run_forever()
+# 🔁 تحديث تلقائي كل 30 ثانية (Live)
+time.sleep(30)
+st.rerun()
