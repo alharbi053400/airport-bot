@@ -1,93 +1,73 @@
 import streamlit as st
-import pandas as pd
-import datetime as dt
-import random
+import requests
+from datetime import datetime
 
 st.set_page_config(layout="wide")
 
-st.title("✈️ نظام تشغيل الرحلات")
+st.title("✈️ نظام تشغيل صالة (بيانات حقيقية)")
 
-# =============================
-# بيانات تشغيل (مثل PDF)
-# =============================
-def get_data():
-    now = dt.datetime.now()
+API_KEY = "02b0bd12fc73d4c2b7741a7e2f3f6685"
 
-    destinations = [
-        "لاهور","لندن هيثرو","القاهرة","كراتشي",
-        "إسلام آباد","تونس","أبوظبي","عمان",
-        "كوالالمبور","دكا","دبي","جاكرتا","الجزائر"
-    ]
+flight_number = st.text_input("ادخل رقم الرحلة (مثال: SV102)")
 
-    airlines = ["Saudia","Flynas","Emirates","Qatar","Turkish"]
+if flight_number:
 
-    data = []
+    url = "http://api.aviationstack.com/v1/flights"
 
-    for i in range(20):
-        t = now + dt.timedelta(minutes=15*i)
+    params = {
+        "access_key": API_KEY,
+        "flight_iata": flight_number
+    }
 
-        destination = random.choice(destinations)
-        flight_number = f"{random.choice(['SV','XY','EK','QR','TK'])}{random.randint(100,999)}"
+    response = requests.get(url, params=params)
+    data = response.json()
 
-        delay = random.choice([0, 0, 10, 20, 30])
+    if "data" in data and len(data["data"]) > 0:
 
-        # الحالة
-        if delay > 0:
-            status = "متأخرة"
+        flight = data["data"][0]
+
+        destination = flight["arrival"]["airport"]
+        scheduled = flight["arrival"]["scheduled"]
+        estimated = flight["arrival"]["estimated"]
+        actual = flight["arrival"]["actual"]
+        status = flight["flight_status"]
+
+        st.subheader("📊 معلومات الرحلة")
+
+        c1, c2, c3 = st.columns(3)
+
+        c1.metric("🌍 الوجهة", destination)
+        c2.metric("📡 الحالة", status)
+        c3.metric("✈️ الرحلة", flight_number)
+
+        st.write("⏰ المجدول:", scheduled)
+        st.write("🔮 المتوقع:", estimated)
+        st.write("✅ الفعلي:", actual)
+
+        # حساب التأخير
+        if scheduled and actual:
+            fmt = "%Y-%m-%dT%H:%M:%S%z"
+
+            try:
+                s = datetime.strptime(scheduled, fmt)
+                a = datetime.strptime(actual, fmt)
+
+                delay = int((a - s).total_seconds() / 60)
+
+                st.metric("⏱️ التأخير (دقائق)", delay)
+
+                if delay > 30:
+                    st.error("🚨 تأخير عالي")
+                elif delay > 10:
+                    st.warning("⚠️ تأخير متوسط")
+                else:
+                    st.success("✅ في الوقت")
+
+            except:
+                st.warning("⚠️ مشكلة في قراءة الوقت")
+
         else:
-            status = random.choice(["وصلت","في موعدها","جاري الوصول"])
+            st.info("ℹ️ الرحلة لم تصل بعد")
 
-        delay_time = ""
-        if delay > 0:
-            delay_time = (t + dt.timedelta(minutes=delay)).strftime("%H:%M")
-
-        data.append([
-            t.strftime("%H:%M"),
-            destination,
-            flight_number,
-            status,
-            delay_time
-        ])
-
-    df = pd.DataFrame(
-        data,
-        columns=["الوقت","الوجهة","رقم الرحلة","الحالة","وقت التأخير"]
-    )
-
-    return df
-
-df = get_data()
-
-# =============================
-# جدول التشغيل
-# =============================
-st.subheader("📋 الرحلات")
-
-st.dataframe(df, use_container_width=True)
-
-# =============================
-# تحليل التشغيل
-# =============================
-st.subheader("📊 تحليل التشغيل")
-
-# عدد المتأخر
-delayed_count = df[df["الحالة"] == "متأخرة"].shape[0]
-
-# الضغط
-if delayed_count >= 7:
-    level = "🔴 مرتفع"
-    staff = 8
-elif delayed_count >= 4:
-    level = "🟡 متوسط"
-    staff = 5
-else:
-    level = "🟢 منخفض"
-    staff = 3
-
-col1, col2, col3 = st.columns(3)
-
-col1.metric("عدد الرحلات", len(df))
-col2.metric("عدد المتأخرة", delayed_count)
-col3.metric("عدد الموظفين المقترح", staff)
-
-st.write(f"مستوى الضغط: {level}")
+    else:
+        st.error("❌ الرحلة غير موجودة")
