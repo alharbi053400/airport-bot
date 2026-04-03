@@ -3,35 +3,27 @@ import pandas as pd
 import time
 from datetime import datetime
 
-# 🔐 بياناتك
 TOKEN = "8714913319:AAF7lWfrtPbWItM-7sj0JhYMVN9zdPofGd8"
 CHAT_ID = "1234119654"
 API_KEY = "02b0bd12fc73d4c2b7741a7e2f3f6685"
 
-# ✈️ API
 API_URL = "http://api.aviationstack.com/v1/flights"
 
-# 📨 إرسال ملف للتليجرام
 def send_file(file_path):
     url = f"https://api.telegram.org/bot{TOKEN}/sendDocument"
     with open(file_path, "rb") as f:
         res = requests.post(url, data={"chat_id": CHAT_ID}, files={"document": f})
-    print("Telegram response:", res.text)
+    print(res.text)
 
-# 📡 جلب الرحلات
 def get_flights():
     params = {
         "access_key": API_KEY,
         "dep_iata": "JED"
     }
-
     res = requests.get(API_URL, params=params)
     print("STATUS:", res.status_code)
-    print("DATA:", res.text[:200])
-
     return res.json()
 
-# 🔍 فلترة البيانات
 def filter_flights(data):
     flights = []
 
@@ -53,7 +45,6 @@ def filter_flights(data):
 
     return flights
 
-# 📊 إنشاء ملف Excel
 def create_excel(flights):
     if not flights:
         flights = [{"ملاحظة": "لا توجد بيانات"}]
@@ -65,7 +56,6 @@ def create_excel(flights):
 
     return filename
 
-# 🚀 التشغيل الرئيسي
 def main():
     print("🚀 بدأ التشغيل")
 
@@ -86,7 +76,6 @@ def main():
             print("❌ خطأ:")
             traceback.print_exc()
 
-        # ⏱ كل 10 ثواني للتجربة (تقدر تخليها 1800 = 30 دقيقة)
         time.sleep(10)
 
 main()
