@@ -4,16 +4,36 @@ import time
 from datetime import datetime
 
 # ==============================
-# بياناتك
+# بياناتك (تأكد منها)
 # ==============================
-
 TOKEN = "8714913319:AAF71WfrtPbWItM-7sj0JhYMVN9zdPoFGd8"
 CHAT_ID = "1234119654"
 API_KEY = "02b0bd12fc73d4c2b7741a7e2f3f6685"
 
+API_URL = "http://api.aviationstack.com/v1/flights"
+
 
 # ==============================
-# جلب الرحلات
+# إرسال ملف تيليجرام
+# ==============================
+def send_file(file_path):
+    url = f"https://api.telegram.org/bot{TOKEN}/sendDocument"
+    with open(file_path, "rb") as f:
+        requests.post(url, data={"chat_id": CHAT_ID}, files={"document": f})
+
+
+# ==============================
+# إرسال رسالة خطأ
+# ==============================
+def send_error(msg):
+    requests.post(
+        f"https://api.telegram.org/bot{TOKEN}/sendMessage",
+        data={"chat_id": CHAT_ID, "text": msg}
+    )
+
+
+# ==============================
+# جلب الرحلات من جدة
 # ==============================
 def get_flights():
     params = {
@@ -25,7 +45,7 @@ def get_flights():
 
 
 # ==============================
-# فلترة الرحلات
+# فلترة البيانات
 # ==============================
 def filter_flights(data):
     flights = []
@@ -36,9 +56,9 @@ def filter_flights(data):
     for f in data["data"]:
         try:
             flights.append({
-                "الرحلة": f["flight"]["iata"],
+                "رقم الرحلة": f["flight"]["iata"],
                 "الوجهة": f["arrival"]["airport"],
-                "الوقت": f["departure"]["scheduled"],
+                "وقت الإقلاع": f["departure"]["scheduled"],
                 "الحالة": f["flight_status"]
             })
         except:
@@ -48,16 +68,16 @@ def filter_flights(data):
 
 
 # ==============================
-# إنشاء Excel
+# إنشاء ملف Excel
 # ==============================
 def create_excel(data):
     df = pd.DataFrame(data)
 
     if df.empty:
         df = pd.DataFrame([{
-            "الرحلة": "لا يوجد",
+            "رقم الرحلة": "لا يوجد",
             "الوجهة": "-",
-            "الوقت": "-",
+            "وقت الإقلاع": "-",
             "الحالة": "-"
         }])
 
@@ -67,29 +87,10 @@ def create_excel(data):
 
 
 # ==============================
-# إرسال تيليجرام
-# ==============================
-def send_file(file_path):
-    url = f"https://api.telegram.org/bot{TOKEN}/sendDocument"
-    with open(file_path, "rb") as f:
-        requests.post(url, data={"chat_id": CHAT_ID}, files={"document": f})
-
-
-# ==============================
-# إرسال خطأ (لو صار)
-# ==============================
-def send_error(msg):
-    requests.post(
-        f"https://api.telegram.org/bot{TOKEN}/sendMessage",
-        data={"chat_id": CHAT_ID, "text": msg}
-    )
-
-
-# ==============================
 # التشغيل الرئيسي
 # ==============================
 def main():
-    print("🚀 البوت اشتغل")
+    print("🚀 البوت شغال")
 
     while True:
         try:
@@ -105,25 +106,8 @@ def main():
             send_error(f"❌ خطأ:\n{str(e)}")
 
         # كل 30 دقيقة
-        time.sleep(1800)
+        time.sleep(10)
 
 
-# تشغيل
-main()
-def create_excel(data):
-    import pandas as pd
-    from datetime import datetime
-
-    df = pd.DataFrame([{"حالة": "شغال"}])
-    filename = f"test_{datetime.now().strftime('%H_%M')}.xlsx"
-    df.to_excel(filename, index=False)
-    return filename
-
-
-def main():
-    file = create_excel([])
-    send_file(file)
-    print("تم الإرسال")
-
-
+# تشغيل البوت
 main()
