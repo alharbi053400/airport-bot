@@ -5,11 +5,11 @@ from datetime import datetime
 # بياناتك
 TOKEN = "8714913319:AAF7lWfrtPbWItM-7sj0JhYMVN9zdPofGd8"
 CHAT_ID = "1234119654"
-API_KEY = "YOUR_API_KEY"
+API_KEY = "02b0bd12fc73d4c2b7741a7e2f3f6685"
 
 API_URL = "http://api.aviationstack.com/v1/flights"
 
-# المطارات السعودية (استبعاد)
+# المطارات السعودية (استبعاد الرحلات الداخلية)
 SAUDI_AIRPORTS = [
     "RUH","DMM","MED","GIZ","TUU","AHB","EAM","HAS",
     "ELQ","URY","AJF","ULH","RAE","SHW","NUM","DWD"
@@ -64,7 +64,7 @@ def generate_report(flights):
 
         t = datetime.fromisoformat(time_str.replace("Z",""))
 
-        # تقسيم نصف ساعة
+        # تقسيم كل نصف ساعة
         minute = "00" if t.minute < 30 else "30"
         key = t.strftime(f"%H:{minute}")
 
@@ -106,12 +106,12 @@ def main_loop():
 
             report, alerts = generate_report(flights)
 
-            # إرسال التقرير فقط إذا تغير
+            # إرسال التقرير إذا تغير
             if report != last_report:
                 send_telegram(report)
                 last_report = report
 
-            # إرسال تنبيهات بدون تكرار
+            # إرسال التنبيهات بدون تكرار
             for alert in alerts:
                 if alert not in last_alerts:
                     send_telegram(alert)
