@@ -10,7 +10,6 @@ from datetime import datetime
 TOKEN = "8714913319:AAF71WfrtPbWItM-7sj0JhYMVN9zdPoFGd8"
 CHAT_ID = "1234119654"
 API_KEY = "02b0bd12fc73d4c2b7741a7e2f3f6685"
-API_URL = "http://api.aviationstack.com/v1/flights"
 
 
 # ==============================
