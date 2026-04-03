@@ -3,22 +3,19 @@ import pandas as pd
 import time
 from datetime import datetime
 
-TOKEN = "حط توكنك"
-CHAT_ID = "حط ايديك"
-API_KEY = "حط مفتاحك"
+# ==============================
+# بياناتك (حط القيم الحقيقية)
+# ==============================
+TOKEN = "PUT_YOUR_TELEGRAM_TOKEN"
+CHAT_ID = "PUT_YOUR_CHAT_ID"
+API_KEY = "PUT_YOUR_AVIATIONSTACK_KEY"
 
 API_URL = "http://api.aviationstack.com/v1/flights"
 
-SAUDI_AIRPORTS = [
-    "RUH","DMM","MED","GIZ","TUU","AHB","EAM","HAS",
-    "ELQ","URY","AJF","ULH","RAE","SHW","NUM","DWD"
-]
 
-def send_file(file_path):
-    url = f"https://api.telegram.org/bot{TOKEN}/sendDocument"
-    with open(file_path, "rb") as f:
-        requests.post(url, data={"chat_id": CHAT_ID}, files={"document": f})
-
+# ==============================
+# جلب الرحلات
+# ==============================
 def get_flights():
     params = {
         "access_key": API_KEY,
@@ -27,83 +24,90 @@ def get_flights():
     res = requests.get(API_URL, params=params)
     return res.json()
 
+
+# ==============================
+# فلترة الرحلات
+# ==============================
 def filter_flights(data):
-    flights = data.get("data", [])
-    result = []
+    flights = []
 
-    for f in flights:
-        dep = f.get("departure", {})
-        arr = f.get("arrival", {})
+    if "data" not in data:
+        return flights
 
-        if dep.get("terminal") != "1":
+    for f in data["data"]:
+        try:
+            flights.append({
+                "الرحلة": f["flight"]["iata"],
+                "الوجهة": f["arrival"]["airport"],
+                "الوقت": f["departure"]["scheduled"],
+                "الحالة": f["flight_status"]
+            })
+        except:
             continue
 
-        if arr.get("iata") in SAUDI_AIRPORTS:
-            continue
+    return flights
 
-        result.append(f)
 
-    return result
+# ==============================
+# إنشاء Excel
+# ==============================
+def create_excel(data):
+    df = pd.DataFrame(data)
 
-def analyze(flights):
-    times = {}
-
-    for f in flights:
-        time_str = f["departure"]["scheduled"]
-        if not time_str:
-            continue
-
-        t = datetime.fromisoformat(time_str.replace("Z",""))
-        minute = "00" if t.minute < 30 else "30"
-        key = t.strftime(f"%H:{minute}")
-
-        times[key] = times.get(key, 0) + 1
-
-    return times
-
-def create_excel(times):
-    rows = []
-
-    for t, count in sorted(times.items()):
-        if count >= 5:
-            status = "زحمة خانقة"
-        elif count >= 3:
-            status = "زحمة"
-        else:
-            status = "طبيعي"
-
-        rows.append({
-            "الوقت": t,
-            "عدد الرحلات": count,
-            "الحالة": status
-        })
-
-    df = pd.DataFrame(rows)
+    if df.empty:
+        df = pd.DataFrame([{
+            "الرحلة": "لا يوجد",
+            "الوجهة": "-",
+            "الوقت": "-",
+            "الحالة": "-"
+        }])
 
     filename = f"report_{datetime.now().strftime('%H_%M')}.xlsx"
     df.to_excel(filename, index=False)
-
     return filename
 
+
+# ==============================
+# إرسال تيليجرام
+# ==============================
+def send_file(file_path):
+    url = f"https://api.telegram.org/bot{TOKEN}/sendDocument"
+    with open(file_path, "rb") as f:
+        requests.post(url, data={"chat_id": CHAT_ID}, files={"document": f})
+
+
+# ==============================
+# إرسال خطأ (لو صار)
+# ==============================
+def send_error(msg):
+    requests.post(
+        f"https://api.telegram.org/bot{TOKEN}/sendMessage",
+        data={"chat_id": CHAT_ID, "text": msg}
+    )
+
+
+# ==============================
+# التشغيل الرئيسي
+# ==============================
 def main():
+    print("🚀 البوت اشتغل")
+
     while True:
         try:
             data = get_flights()
             flights = filter_flights(data)
-            times = analyze(flights)
 
-            file = create_excel(times)
+            file = create_excel(flights)
             send_file(file)
 
-            print("تم الإرسال")
+            print("✅ تم الإرسال")
 
         except Exception as e:
-            requests.post(
-                f"https://api.telegram.org/bot{TOKEN}/sendMessage",
-                data={"chat_id": CHAT_ID, "text": f"خطأ:\n{str(e)}"}
-            )
+            send_error(f"❌ خطأ:\n{str(e)}")
 
-        time.sleep(1800)  # كل 30 دقيقة
+        # كل 30 دقيقة
+        time.sleep(1800)
 
-if __name__ == "__main__":
-    main()
+
+# تشغيل
+main()
