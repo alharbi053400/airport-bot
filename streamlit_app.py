@@ -1,73 +1,136 @@
-import streamlit as st
 import requests
+import time
 from datetime import datetime
 
-st.set_page_config(layout="wide")
+# بياناتك
+TOKEN = "8714913319:AAF7lWfrtPbWItM-7sj0JhYMVN9zdPofGd8"
+CHAT_ID = "1234119654"
+API_KEY = "YOUR_API_KEY"
 
-st.title("✈️ نظام تشغيل صالة (بيانات حقيقية)")
+API_URL = "http://api.aviationstack.com/v1/flights"
 
-API_KEY = "02b0bd12fc73d4c2b7741a7e2f3f6685"
+# المطارات السعودية (استبعاد)
+SAUDI_AIRPORTS = [
+    "RUH","DMM","MED","GIZ","TUU","AHB","EAM","HAS",
+    "ELQ","URY","AJF","ULH","RAE","SHW","NUM","DWD"
+]
 
-flight_number = st.text_input("ادخل رقم الرحلة (مثال: SV102)")
+last_report = ""
+last_alerts = set()
 
-if flight_number:
 
-    url = "http://api.aviationstack.com/v1/flights"
+def send_telegram(message):
+    url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
+    requests.post(url, data={"chat_id": CHAT_ID, "text": message})
 
+
+def get_flights():
     params = {
         "access_key": API_KEY,
-        "flight_iata": flight_number
+        "dep_iata": "JED"
     }
+    response = requests.get(API_URL, params=params)
+    return response.json()
 
-    response = requests.get(url, params=params)
-    data = response.json()
 
-    if "data" in data and len(data["data"]) > 0:
+def filter_flights(data):
+    flights = data.get("data", [])
+    result = []
 
-        flight = data["data"][0]
+    for f in flights:
+        dep = f.get("departure", {})
+        arr = f.get("arrival", {})
 
-        destination = flight["arrival"]["airport"]
-        scheduled = flight["arrival"]["scheduled"]
-        estimated = flight["arrival"]["estimated"]
-        actual = flight["arrival"]["actual"]
-        status = flight["flight_status"]
+        # صالة 1 فقط
+        if dep.get("terminal") != "1":
+            continue
 
-        st.subheader("📊 معلومات الرحلة")
+        # استبعاد الرحلات الداخلية
+        if arr.get("iata") in SAUDI_AIRPORTS:
+            continue
 
-        c1, c2, c3 = st.columns(3)
+        result.append(f)
 
-        c1.metric("🌍 الوجهة", destination)
-        c2.metric("📡 الحالة", status)
-        c3.metric("✈️ الرحلة", flight_number)
+    return result
 
-        st.write("⏰ المجدول:", scheduled)
-        st.write("🔮 المتوقع:", estimated)
-        st.write("✅ الفعلي:", actual)
 
-        # حساب التأخير
-        if scheduled and actual:
-            fmt = "%Y-%m-%dT%H:%M:%S%z"
+def generate_report(flights):
+    times = {}
 
-            try:
-                s = datetime.strptime(scheduled, fmt)
-                a = datetime.strptime(actual, fmt)
+    for f in flights:
+        time_str = f["departure"]["scheduled"]
+        if not time_str:
+            continue
 
-                delay = int((a - s).total_seconds() / 60)
+        t = datetime.fromisoformat(time_str.replace("Z",""))
 
-                st.metric("⏱️ التأخير (دقائق)", delay)
+        # تقسيم نصف ساعة
+        minute = "00" if t.minute < 30 else "30"
+        key = t.strftime(f"%H:{minute}")
 
-                if delay > 30:
-                    st.error("🚨 تأخير عالي")
-                elif delay > 10:
-                    st.warning("⚠️ تأخير متوسط")
-                else:
-                    st.success("✅ في الوقت")
+        times[key] = times.get(key, 0) + 1
 
-            except:
-                st.warning("⚠️ مشكلة في قراءة الوقت")
+    report = "📊 تقرير الرحلات - صالة 1 (دولي)\n"
+    report += "👤 ريان الحميدي الحربي | 📞 0534006391\n\n"
 
+    total = len(flights)
+    report += f"✈️ عدد الرحلات: {total}\n\n"
+
+    alerts = []
+
+    for t in sorted(times):
+        count = times[t]
+
+        if count >= 5:
+            status = "🚨 زحمة خانقة"
+            alerts.append(f"🚨 زحمة خانقة {t} ({count})")
+        elif count >= 3:
+            status = "⚠️ زحمة"
         else:
-            st.info("ℹ️ الرحلة لم تصل بعد")
+            status = "✅ طبيعي"
 
-    else:
-        st.error("❌ الرحلة غير موجودة")
+        report += f"{t} → {count} رحلات ({status})\n"
+
+    return report, alerts
+
+
+def main_loop():
+    global last_report, last_alerts
+
+    send_telegram("📡 تم تشغيل النظام\n👤 ريان الحميدي الحربي\n📞 0534006391")
+
+    while True:
+        try:
+            data = get_flights()
+            flights = filter_flights(data)
+
+            report, alerts = generate_report(flights)
+
+            # إرسال التقرير فقط إذا تغير
+            if report != last_report:
+                send_telegram(report)
+                last_report = report
+
+            # إرسال تنبيهات بدون تكرار
+            for alert in alerts:
+                if alert not in last_alerts:
+                    send_telegram(alert)
+                    last_alerts.add(alert)
+
+        except Exception as e:
+            send_telegram(f"❌ خطأ\nريان الحميدي الحربي\n0534006391\n{str(e)}")
+
+        time.sleep(7200)  # كل ساعتين
+
+
+def run_forever():
+    while True:
+        try:
+            main_loop()
+        except Exception as e:
+            send_telegram(f"🔥 إعادة تشغيل السيرفر\n{str(e)}")
+            time.sleep(10)
+
+
+if __name__ == "__main__":
+    run_forever()
