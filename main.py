@@ -93,15 +93,14 @@ def create_excel(times):
             "الحالة": status
         })
 
-    if not rows:
-        rows = [{"ملاحظة": "لا توجد بيانات"}]
+df = pd.DataFrame(rows)
 
-    df = pd.DataFrame(rows)
-    filename = f"report_{datetime.now().strftime('%H_%M')}.xlsx"
-    df.to_excel(filename, index=False)
+filename = f"report_{datetime.now().strftime('%H_%M')}.xlsx"
 
-    print("📁 تم إنشاء:", filename)
-    return filename
+df.to_excel(filename, index=False)
+
+print("📁 تم إنشاء:", filename)
+return filename
 
 # 🚀 التشغيل
 def main():
