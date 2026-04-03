@@ -3,20 +3,22 @@ import pandas as pd
 import time
 from datetime import datetime
 
-# 🔑 بياناتك
-TOKEN = 8714913319:AAHzb0k4XvMfA8lbH_1NZi7iMW0jm_OqGtM
-CHAT_ID = 1234119654
+# 🔐 بياناتك
+TOKEN = "8714913319:AAF7lWfrtPbWItM-7sj0JhYMVN9zdPofGd8"
+CHAT_ID = "1234119654"
 API_KEY = "02b0bd12fc73d4c2b7741a7e2f3f6685"
 
+# ✈️ API
 API_URL = "http://api.aviationstack.com/v1/flights"
 
-# 📤 إرسال ملف تيليجرام
+# 📨 إرسال ملف للتليجرام
 def send_file(file_path):
     url = f"https://api.telegram.org/bot{TOKEN}/sendDocument"
     with open(file_path, "rb") as f:
-        requests.post(url, data={"chat_id": CHAT_ID}, files={"document": f})
+        res = requests.post(url, data={"chat_id": CHAT_ID}, files={"document": f})
+    print("Telegram response:", res.text)
 
-# 🌐 جلب الرحلات
+# 📡 جلب الرحلات
 def get_flights():
     params = {
         "access_key": API_KEY,
@@ -24,30 +26,34 @@ def get_flights():
     }
 
     res = requests.get(API_URL, params=params)
-    data = res.json()
+    print("STATUS:", res.status_code)
+    print("DATA:", res.text[:200])
 
-    print("📊 API RESPONSE:", data)  # مهم للتشخيص
+    return res.json()
 
-    return data
-
-# 🧹 فلترة
+# 🔍 فلترة البيانات
 def filter_flights(data):
     flights = []
 
-    for f in data.get("data", []):
+    if "data" not in data:
+        return flights
+
+    for f in data["data"]:
         try:
             flights.append({
-                "رقم الرحلة": f["flight"]["iata"],
-                "الوجهة": f["arrival"]["airport"],
-                "شركة الطيران": f["airline"]["name"],
-                "الحالة": f["flight_status"]
+                "رقم الرحلة": f.get("flight", {}).get("iata"),
+                "شركة الطيران": f.get("airline", {}).get("name"),
+                "من": f.get("departure", {}).get("airport"),
+                "إلى": f.get("arrival", {}).get("airport"),
+                "الوقت": f.get("departure", {}).get("scheduled"),
+                "الحالة": f.get("flight_status")
             })
         except:
             continue
 
     return flights
 
-# 📊 إنشاء Excel
+# 📊 إنشاء ملف Excel
 def create_excel(flights):
     if not flights:
         flights = [{"ملاحظة": "لا توجد بيانات"}]
@@ -59,7 +65,7 @@ def create_excel(flights):
 
     return filename
 
-# 🚀 التشغيل
+# 🚀 التشغيل الرئيسي
 def main():
     print("🚀 بدأ التشغيل")
 
@@ -76,10 +82,11 @@ def main():
             print("✅ تم الإرسال")
 
         except Exception as e:
-            print("❌ خطأ:", e)
+            import traceback
+            print("❌ خطأ:")
+            traceback.print_exc()
 
-        # ⏱️ للتجربة خليه 10 ثواني
+        # ⏱ كل 10 ثواني للتجربة (تقدر تخليها 1800 = 30 دقيقة)
         time.sleep(10)
-
 
 main()
