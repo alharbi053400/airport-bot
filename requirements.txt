@@ -3,3 +3,6 @@ pandas
 requests
 beautifulsoup4
 matplotlib
+requests
+pandas
+openpyxl
