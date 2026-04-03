@@ -50,8 +50,7 @@ def filter_flights(data):
         if arr.get("iata") in SAUDI_AIRPORTS:
             continue
 
-        result.append(f) كل
-
+        result.append(f) 
     print("📊 بعد الفلترة:", len(result))
     return result
 
