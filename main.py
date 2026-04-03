@@ -68,7 +68,7 @@ def main():
         except Exception as e:
             print("❌ خطأ:", str(e))
 
-        time.sleep(60)
+        time.sleep(10)
 
 if __name__=="__main__":
     main()
